@@ -7,12 +7,14 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format} ]))
 
-(def example-csv-config-text "feed_name,feed_url
-sample,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
-broken,http://localhost/gtfs-examples/broken-feed/gtfs.zip
-kingcounty,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
-error,http://
-mendocino,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip")
+(def example-csv-config-text "feed_name,feed_description,feed_url
+sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
+broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
+kingcounty,King County Seattle Metro,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
+error,broken link to test file parsing,http://
+mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip
+trimet,Tri-Met: Portland Metro,http://developer.trimet.org/schedule/gtfs.zip
+cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
 
 (defn keyword-with-dashes
   "convert a string to a keyword replacing '_' with '-'"
@@ -44,7 +46,7 @@ mendocino,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-t
     (map (partial zipmap header)
          data)))
 
-(def example-csv-config
+(defn example-csv-config []
   (csv->maps example-csv-config-text))
 
 (defn page-last-modified [url]
@@ -57,6 +59,6 @@ mendocino,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-t
 (defn test-parse-config []
   (map (juxt :feed-name
              (comp page-last-modified :feed-url)) 
-       example-csv-config))
+       (example-csv-config)))
 
 (defn -main [] (test-parse-config))
