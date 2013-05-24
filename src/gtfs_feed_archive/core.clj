@@ -10,11 +10,12 @@
 (def example-csv-config-text "feed_name,feed_description,feed_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
 broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
-kingcounty,King County Seattle Metro,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
 error,broken link to test file parsing,http://
-mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip
-trimet,Tri-Met: Portland Metro,http://developer.trimet.org/schedule/gtfs.zip
-cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
+mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip")
+
+;; kingcounty,King County Seattle Metro,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
+;; trimet,Tri-Met: Portland Metro,http://developer.trimet.org/schedule/gtfs.zip
+;; cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip
 
 (defn keyword-with-dashes
   "convert a string to a keyword replacing '_' with '-'"
@@ -49,20 +50,24 @@ cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
 (defn example-csv-config []
   (csv->maps example-csv-config-text))
 
+(defn last-modified [response]
+  (-> response
+      (get-in [:headers "last-modified"])
+      java.util.Date.))
+
 (defn page-last-modified [url]
   (try 
-    (-> (http/head url)
-        (get-in [:headers "last-modified"])
-        java.util.Date.)
+    (last-modified (http/head url))
     (catch Exception _ nil)))
 
-(defn page-data [url]
+(defn page-data "http/get example"
+  [url]
   (try 
     (-> (http/get url)
         (get :body))
     (catch Exception _ nil)))
 
-(defn page-size [url]
+(defn page-size "size of data at URL" [url]
   (count (page-data url)))
 
 (defn feed-last-updates
@@ -88,7 +93,7 @@ cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
                       #(.after (:last-update %) date))
           feed-updates))
 
-(def feed-data)
+;;(def feed-data)
 
 (defn -main [] (feed-last-updates))
 
@@ -98,17 +103,24 @@ cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
 
 (defn feed->download-agent [feed]
   (agent {:url (:feed-url feed) :download-attempt 0
-          :destination-file (str "/tmp/download-agent-destination-test-"
+          :destination-file (str "/tmp/gtfs-cache/"
+                                 (:feed-name feed) "/"
                                  (.substring (inst->rfc3339 (:last-update feed))
-                                             0 19)) }))
+                                             0 19)
+                                 ".zip")}))
 
-(def download-agent (agent {:url "http://localhost:1111/" :download-attempt 0
-                            :destination-file "/tmp/download-agent-destination-test"}))
+(defn dirname [path]
+  (.getParent (clojure.java.io/file path)))
+
+(defn mkdir-p [path]
+  (.mkdirs (clojure.java.io/file path)))
+
 
 (defn download-agent-save-file [state]
   (let [file (:destination-file state)
         data (:data state)]
-    (try (spit file data)
+    (try (mkdir-p (dirname file))
+         (spit file data)
          (-> state
              (dissoc :data)
              (assoc :file-saved true))
@@ -126,16 +138,37 @@ cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip")
   ;; TODO: implement exponential back-off delay
   ;; proportional to 2**(download-attempt) seconds.
   (if (< (:download-attempt state) 5) 
-    (let [data (page-data (:url state))] ;; attempt a download
-      (if (nil? data)
+    (let [response (http/get (:url state))] ;; attempt a download
+      (if (nil? response)
         (assoc state :download-attempt ;; ok, we'll try again
                (inc (:download-attempt state)))
         (-> state 
             (dissoc :download-attempt)
-            (assoc :data data))))
+            (assoc :last-modified (last-modified response))
+            ;;(assoc :response response)
+            (assoc :data (:body response)))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
         (assoc :download-failed true))))
+
+;; for testing
+(defn make-agents! []
+  (def *agents (map feed->download-agent 
+                    (fresh-feeds (feed-last-updates) #inst "2012"))))
+
+
+(defn show-agent-info []
+  (doseq [a *agents]
+    (let [a (deref a)]
+      (println "")
+      (doseq [k (keys a)]
+        (if (= k :data)
+          (println "has data of size: " (count (:data a)))
+          (println k (k a)))))))
+
+(defn run-agents! []
+  (doseq [a *agents]
+    (send-off a download-agent-next-state)))
 
 (defn download-agent-next-state [state]
   (cond
