@@ -7,10 +7,14 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
+;; for development -- set local documentation source for javadoc command.
+(dosync (ref-set clojure.java.javadoc/*local-javadocs*
+                 ["/usr/share/doc/openjdk-6-doc/api"]))
+
 (def example-csv-config-text "feed_name,feed_description,feed_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
 broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
-error,broken link to test file parsing,http://
+error,broken link to test file parsing,http://localhost:1111
 mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip")
 
 ;; kingcounty,King County Seattle Metro,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
@@ -99,14 +103,15 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 (defn inst->rfc3339 [inst]
   ;; funny that there's no function to do this already?
-  (.substring (pr-str inst) 7 36))
+  (if (nil? inst)
+    nil
+    (.substring (pr-str inst) 7 26)))
 
 (defn feed->download-agent [feed]
   (agent {:url (:feed-url feed) :download-attempt 0
           :destination-file (str "/tmp/gtfs-cache/"
                                  (:feed-name feed) "/"
-                                 (.substring (inst->rfc3339 (:last-update feed))
-                                             0 19)
+                                 (inst->rfc3339 (:last-update feed))
                                  ".zip")}))
 
 (defn dirname [path]
@@ -138,20 +143,23 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                (assoc :file-save-failed true))))))
 
 (defn download-agent-attempt-download [state]
-  ;; TODO: implement exponential back-off delay
-  ;; proportional to 2**(download-attempt) seconds.
-  (if (< (:download-attempt state) 5) 
-    ;; http/get with the { :as :byte-array } option avoids text
-    ;; conversion, which would corrupt our zip file.
-    (let [response (http/get (:url state)
-                             {:as :byte-array})]
-      (if (nil? response)
-        (assoc state :download-attempt ;; ok, we'll try again later.
-               (inc (:download-attempt state)))
-        (-> state 
-            (dissoc :download-attempt)
-            (assoc :last-modified (last-modified response))
-            (assoc :data (:body response)))))
+  (if (< (:download-attempt state) 5)
+    (do
+      ;; exponential back-off delay, 2**download-attempt seconds.
+      (Thread/sleep (* 1000 (Math/pow 2 (:download-attempt state))))
+      ;; http/get with the { :as :byte-array } option avoids text
+      ;; conversion, which would corrupt our zip file.
+      (let [response (try
+                       (http/get (:url state)
+                                 {:as :byte-array})
+                       (catch Exception _ nil))]
+        (if (nil? response)
+          (assoc state :download-attempt ;; ok, we'll try again later.
+                 (inc (:download-attempt state)))
+          (-> state 
+              (dissoc :download-attempt)
+              (assoc :last-modified (last-modified response))
+              (assoc :data (:body response))))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
         (assoc :download-failed true))))
@@ -159,7 +167,8 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 ;; for testing
 (defn make-agents! []
   (def *agents (map feed->download-agent 
-                    (fresh-feeds (feed-last-updates) #inst "2012"))))
+                    (feed-last-updates) )))
+;;(fresh-feeds (feed-last-updates) #inst "2012")
 
 
 (defn show-agent-info []
@@ -177,13 +186,21 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 (defn download-agent-next-state [state]
   (cond
-   ;; file has been saved? we're done.
-   (:file-saved state) state 
+   ;; file has been saved?
+   ;; we're done, and the download succeeded.
+   (:file-saved state) state
+   ;; file save failure, or download failure?
+   ;; we're done, but the download didn't work.
+   (or (:download-failed state)
+       (:file-save-failed state))  state
+      (:file-save-failed state) state
    ;; we have data? try and save it to a file.
-   (:data state) (download-agent-save-file state)
-   ;; file save failure? we're done.
-   (:file-save-failed state) state
-   ;; download failure? we're done.
-   (:download-failed state) state
-   ;; OK, try a download
-   (:download-attempt state) (download-agent-attempt-download state)))
+   (:data state) (do (println 'next-state)
+                     (send-off *agent* download-agent-next-state)
+                     (println 'save)
+                     (download-agent-save-file state)) 
+   ;; we just started, OK try a download.
+   (:download-attempt state) (do (println 'next-state)
+                                 (send-off *agent* download-agent-next-state)
+                                 (println 'download)
+                                 (download-agent-attempt-download state))))
