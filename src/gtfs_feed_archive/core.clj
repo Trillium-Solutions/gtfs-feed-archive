@@ -1,6 +1,6 @@
 (ns gtfs-feed-archive.core
   (:refer-clojure :exclude [format]) ;; I like cl-format better...
-  (:require [clj-http.client :as http])
+  (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
   (:use clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
@@ -63,7 +63,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn page-data "http/get example"
   [url]
   (try 
-    (-> (http/get url)
+    (-> (http/get url {:as :byte-array})
         (get :body))
     (catch Exception _ nil)))
 
@@ -120,7 +120,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   (let [file (:destination-file state)
         data (:data state)]
     (try (mkdir-p (dirname file))
-         (spit file data)
+         (println "type of data is " (type data))
+         ;; the Java output-stream is for writing binary data.
+         (with-open [w (clojure.java.io/output-stream file)]
+           (.write w data))
          (-> state
              (dissoc :data)
              (assoc :file-saved true))
@@ -138,14 +141,16 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   ;; TODO: implement exponential back-off delay
   ;; proportional to 2**(download-attempt) seconds.
   (if (< (:download-attempt state) 5) 
-    (let [response (http/get (:url state))] ;; attempt a download
+    ;; http/get with the { :as :byte-array } option avoids text
+    ;; conversion, which would corrupt our zip file.
+    (let [response (http/get (:url state)
+                             {:as :byte-array})]
       (if (nil? response)
-        (assoc state :download-attempt ;; ok, we'll try again
+        (assoc state :download-attempt ;; ok, we'll try again later.
                (inc (:download-attempt state)))
         (-> state 
             (dissoc :download-attempt)
             (assoc :last-modified (last-modified response))
-            ;;(assoc :response response)
             (assoc :data (:body response)))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
