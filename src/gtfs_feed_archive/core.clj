@@ -26,29 +26,49 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   [string]
   (keyword (clojure.string/replace string "_" "-")))
 
-(defn methods-of-java-object [obj]
+(defn methods-of-java-object
+  "For repl development. Finds methods of a java object."
+  [obj]
   (-> obj (class) (.getDeclaredMethods) (seq)))
 
 (defn string->bytes [s]
   (byte-array (map byte s)))
 
+(defn copy-binary-stream [in-stream out-stream]
+  (let [^bytes buffer (byte-array 10)]
+    (loop []
+      (let [nread (.read in-stream buffer)]
+        (format true "nread: ~a~%" nread)
+        (when (pos? nread)
+          (.write out-stream buffer 0 nread)
+          (recur))))))
+
+(defn copy-binary-file "Example code for binary file copy."
+  [in-file out-file]
+  (with-open [in (clojure.java.io/input-stream in-file)
+              out (clojure.java.io/output-stream out-file)]
+    (copy-binary-stream in out)))
+
+;; TODO: parametrize so contents can be a java.io.InputStream, in which case
+;; we'll loop and copy everything from the stream into the zip file.
 (defn make-zip-file
   [output-file-name names-contents]
-  (let [z (java.util.zip.ZipOutputStream.
+  (with-open [z (java.util.zip.ZipOutputStream.
            (clojure.java.io/output-stream output-file-name))]
     (doseq [[name content] names-contents]
-      (doto z
-        ;; As long as names-contents is a lazy sequence we won't have
-        ;; to keep all our file contents in memory at the same time.
-        (.putNextEntry (java.util.zip.ZipEntry. name))
-        (.write content)))
-    (.close z)))
+      (.putNextEntry z (java.util.zip.ZipEntry. name))
+      (condp isa? (type content)
+        java.io.InputStream (copy-binary-stream content z) 
+        (Class/forName "[B") (.write z content)))))
 
 (defn make-example-zip-file []
   (make-zip-file "/tmp/foo.zip"
                  [["foo/foo.txt" (string->bytes "foo\n")]
                   ["foo/bar.txt" (string->bytes "bar\n")]
                   ["foo/baz.txt" (string->bytes "baz\n")]]))
+
+(defn file->bytes [input-file-name]
+  (clojure.java.io/input-stream input-file-name))
 
 (defn csv->maps
   "Turn a CSV string (with headers) into a list of maps from header->data."
