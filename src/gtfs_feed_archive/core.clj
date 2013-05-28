@@ -29,18 +29,26 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn methods-of-java-object [obj]
   (-> obj (class) (.getDeclaredMethods) (seq)))
 
-(defn byte-example []
-  (seq (byte-array (map byte "foo\n"))))
+(defn string->bytes [s]
+  (byte-array (map byte s)))
+
+(defn make-zip-file
+  [output-file-name names-contents]
+  (let [z (java.util.zip.ZipOutputStream.
+           (clojure.java.io/output-stream output-file-name))]
+    (doseq [[name content] names-contents]
+      (doto z
+        ;; As long as names-contents is a lazy sequence we won't have
+        ;; to keep all our file contents in memory at the same time.
+        (.putNextEntry (java.util.zip.ZipEntry. name))
+        (.write content)))
+    (.close z)))
 
 (defn make-example-zip-file []
-  (let [z (java.util.zip.ZipOutputStream.
-           (clojure.java.io/output-stream "/tmp/foo.zip"))]
-    (doto z
-      (.putNextEntry (java.util.zip.ZipEntry. "foo/foo.txt"))
-      (.write (byte-array (map byte "foo\n")))
-      (.putNextEntry (java.util.zip.ZipEntry. "foo/bar.txt"))
-      (.write (byte-array (map byte "bar\n")))
-      (.close))))
+  (make-zip-file "/tmp/foo.zip"
+                 [["foo/foo.txt" (string->bytes "foo\n")]
+                  ["foo/bar.txt" (string->bytes "bar\n")]
+                  ["foo/baz.txt" (string->bytes "baz\n")]]))
 
 (defn csv->maps
   "Turn a CSV string (with headers) into a list of maps from header->data."
@@ -170,7 +178,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                     (feed-last-updates) )))
 ;;(fresh-feeds (feed-last-updates) #inst "2012")
 
-
 (defn show-agent-info []
   (doseq [a *agents]
     (let [a (deref a)]
@@ -183,6 +190,15 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn run-agents! []
   (doseq [a *agents]
     (send-off a download-agent-next-state)))
+
+
+;;; TODO: ultimately we can verify a download succeeded by checking if
+;;; the result is a zip file which represents a more-or-less valid
+;;; GTFS feed.
+;;;
+;;; If not we should probably punt with an information message to the
+;;; user, since we may simply be using the wrong URL or the file may be
+;;; corrupt.
 
 (defn download-agent-next-state [state]
   (cond
