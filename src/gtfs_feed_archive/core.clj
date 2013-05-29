@@ -32,15 +32,20 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   (-> obj (class) (.getDeclaredMethods) (seq)))
 
 (defn string->bytes [s]
+  "Convert a string into an array of bytes."
   (byte-array (map byte s)))
 
-(defn copy-binary-stream [in-stream out-stream]
-  (let [^bytes buffer (byte-array 10)]
+(defn power-of-two "nth power of 2" [n] (int (Math/pow 2 n)))
+
+(defn copy-binary-stream [^java.io.InputStream in
+                          ^java.io.OutputStream out]
+  "Buffered copy of in-stream to out-stream."
+  (let [^bytes buffer (byte-array (power-of-two 14))]
     (loop []
-      (let [nread (.read in-stream buffer)]
+      (let [nread (.read in buffer)]
         (format true "nread: ~a~%" nread)
         (when (pos? nread)
-          (.write out-stream buffer 0 nread)
+          (.write out buffer 0 nread)
           (recur))))))
 
 (defn copy-binary-file "Example code for binary file copy."
@@ -148,15 +153,13 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn mkdir-p [path]
   (.mkdirs (clojure.java.io/file path)))
 
-
 (defn download-agent-save-file [state]
   (let [file (:destination-file state)
         data (:data state)]
     (try (mkdir-p (dirname file))
-         (println "type of data is " (type data))
-         ;; the Java output-stream is for writing binary data.
-         (with-open [w (clojure.java.io/output-stream file)]
-           (.write w data))
+         (with-open [w 
+                     (clojure.java.io/output-stream file)]
+           (.write w data))             ; binary data
          (-> state
              (dissoc :data)
              (assoc :file-saved true))
@@ -174,7 +177,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   (if (< (:download-attempt state) 5)
     (do
       ;; exponential back-off delay, 2**download-attempt seconds.
-      (Thread/sleep (* 1000 (Math/pow 2 (:download-attempt state))))
+      (Thread/sleep (* 1000 (power-of-two (:download-attempt state))))
       ;; http/get with the { :as :byte-array } option avoids text
       ;; conversion, which would corrupt our zip file.
       (let [response (try
@@ -192,24 +195,77 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         (dissoc :download-attempt)
         (assoc :download-failed true))))
 
-;; for testing
-(defn make-agents! []
-  (def *agents (map feed->download-agent 
-                    (feed-last-updates) )))
-;;(fresh-feeds (feed-last-updates) #inst "2012")
 
-(defn show-agent-info []
-  (doseq [a *agents]
+;; Store all download files in a cache data structure. The cache
+;; is (TODO) populated on startup by reading a cache directory,
+;; modified by clients sending actions, and can be observed by a
+;; cache-notifier.
+
+;; Either files have already been downloaded, or they should be
+;; downloaded in the future (in which case we start a download-agent).
+;; Old files can be expired when new valid data is available.
+
+;; We can report errors if files we are trying to cache cannot
+;; be downloaded, or if they are corrupt.
+
+;; Consumers will request files to be added to the cache (for
+;; instance, files from a set of feeds which have been modified since
+;; May 1st), by sending an action to the cache-manager.  Then we will
+;; modify the cache structure such that agents are created for each
+;; file, and start the agents.
+
+;; When the agents complete with success, complete with error, or
+;; hang and we time them out (= error state), a cache-notifier can
+;; we notify the client of the result using a promise.
+
+;; Each download agent should be responsible for updating its own
+;; status. If an agent completes in error (or we cancel it), it is our
+;; responsibility to reset all its data to a known-good state (for
+;; instance, if there was a half-written file we should make sure to
+;; erase it so it doesn't accidentally get used the next time we scan
+;; for new cache files.
+
+;; Clients can wait on results by starting a cache-notifier for the
+;; set of items the consumer needs.  The cache-notifier will deliver a
+;; promise when either the cache is ready to use, or there was a
+;; failure downloading some of the files which were requested. It does
+;; this by registering a watch function on the download agent for each
+;; file it is waiting for.
+
+(defonce cache-manager
+  (agent []))
+
+;;; This could be called "refresh feed" or "fetch feed"? Since, the
+;;; cache could already have an older copy of the feed; in fact the
+;;; older copy may still be current.
+;;;
+;;; usage: (send-off cache-manager fetch-feed! feed)
+(defn fetch-feed! [manager feed]
+  (let [d (feed->download-agent feed)]
+    (send-off d download-agent-next-state)
+    (conj manager
+          d)))
+
+(defn !fetch-all-feeds! []
+  (doseq [f (feed-last-updates)]
+    (send-off cache-manager fetch-feed! f)))
+
+;; For instance
+;; (!fetch-fresh-feeds! #inst "2012")
+(defn !fetch-fresh-feeds! [date]
+  (doseq [f (fresh-feeds (feed-last-updates)
+                         date)]
+    (send-off cache-manager fetch-feed! f)))
+
+
+(defn show-cache-manager-info []
+  (doseq [a @cache-manager]
     (let [a (deref a)]
       (println "")
       (doseq [k (keys a)]
         (if (= k :data)
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
-
-(defn run-agents! []
-  (doseq [a *agents]
-    (send-off a download-agent-next-state)))
 
 
 ;;; TODO: ultimately we can verify a download succeeded by checking if
