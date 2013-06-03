@@ -130,11 +130,11 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                       #(.after (:last-update %) date))
           feed-updates))
 
-;;(def feed-data)
-
 (defn -main [] (feed-last-updates))
 
-(defn inst->rfc3339 [inst]
+(defn inst->rfc3339-day
+  "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
+  [inst]
   ;; funny that there's no function to do this already?
   (if (nil? inst)
     nil
@@ -187,7 +187,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn download-agent-save-file [state]
   (let [file-name (str (:destination-dir state) "/"
                        (:feed-name state) "/"
-                       (inst->rfc3339 (:last-modified state))
+                       (inst->rfc3339-day (:last-modified state))
                        ".zip")
         data (:data state)]
     (try (mkdir-p (dirname file-name))
