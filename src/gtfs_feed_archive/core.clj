@@ -141,7 +141,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (.substring (pr-str inst) 7 26)))
 
 (defn feed->download-agent [feed]
-  (agent {:url (:feed-url feed) :download-attempt 0
+  (agent {:url (:feed-url feed)
+          :download-attempt 0
+          :feed-name (:feed-name feed)
+          :feed-description (:feed-description feed) ; for debugging.
           :destination-file (str "/tmp/gtfs-cache/"
                                  (:feed-name feed) "/"
                                  (inst->rfc3339 (:last-update feed))
@@ -155,14 +158,16 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 (defn download-agent-save-file [state]
   (let [file (:destination-file state)
-        data (:data state)]
+        data (:data state)
+        now (java.util.Date.)]
     (try (mkdir-p (dirname file))
          (with-open [w 
                      (clojure.java.io/output-stream file)]
            (.write w data))             ; binary data
          (-> state
              (dissoc :data)
-             (assoc :file-saved true))
+             (assoc :file-saved true)
+             (assoc :checked-time now)) ; 
          (catch Exception _
            (-> state
                ;; hmm, what is the proper course of action should a
@@ -234,6 +239,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 (defonce cache-manager
   (agent []))
+
+;;; for debugging
+(defn !reset-cache-manager! []
+  (def cache-manager (agent [])))
 
 ;;; This could be called "refresh feed" or "fetch feed"? Since, the
 ;;; cache could already have an older copy of the feed; in fact the
