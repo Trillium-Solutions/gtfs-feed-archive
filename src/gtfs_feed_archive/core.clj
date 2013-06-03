@@ -145,29 +145,61 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           :download-attempt 0
           :feed-name (:feed-name feed)
           :feed-description (:feed-description feed) ; for debugging.
-          :destination-file (str "/tmp/gtfs-cache/"
-                                 (:feed-name feed) "/"
-                                 (inst->rfc3339 (:last-update feed))
-                                 ".zip")}))
+          :destination-dir "/tmp/gtfs-cache/"}))
 
-(defn dirname [path]
+(defn dirname "directory component of path" [path]
   (.getParent (clojure.java.io/file path)))
 
-(defn mkdir-p [path]
+(defn mkdir-p "make directory & create parent directories as needed" [path]
   (.mkdirs (clojure.java.io/file path)))
 
+(defn download-agent-success? [state]
+  "Has the file been saved?"
+  (:file-saved state))
+
+(defn download-agent-failure? 
+  "Was there a file save failure, or a download failure?
+   In either case We're done, but the download didn't work." 
+  [state]
+  (or (:download-failed state)
+      (:file-save-failed state)))
+
+(defn download-agent-completed? [state]
+  "Has the download agent completed, either with success or failure??"
+  ;; An alternative would be to check if there's a (:completion-date state)
+  (or (download-agent-success? state) 
+      (download-agent-failure? state)))
+
+(def download-agent-still-running?
+  (complement download-agent-completed?))
+
+(defn download-agent-completed-after?
+  "Has a download agent completed on or after earliest-date?"
+  [earliest-date state]
+  (and (download-agent-completed? state)
+       (when-let [d (:completion-date state)]
+         (not (.before d earliest-date)))))
+
+(defn now 
+  "We're looking at now, now. This is now."
+  [] (java.util.Date.))
+
 (defn download-agent-save-file [state]
-  (let [file (:destination-file state)
-        data (:data state)
-        now (java.util.Date.)]
-    (try (mkdir-p (dirname file))
+  (let [file-name (str (:destination-dir state) "/"
+                       (:feed-name state) "/"
+                       (inst->rfc3339 (:last-modified state))
+                       ".zip")
+        data (:data state)]
+    (try (mkdir-p (dirname file-name))
          (with-open [w 
-                     (clojure.java.io/output-stream file)]
+                     (clojure.java.io/output-stream file-name)]
            (.write w data))             ; binary data
          (-> state
              (dissoc :data)
+             (dissoc :destination-dir)
              (assoc :file-saved true)
-             (assoc :checked-time now)) ; 
+             (assoc :file-name file-name)
+             (assoc :completion-date (now)))
          (catch Exception _
            (-> state
                ;; hmm, what is the proper course of action should a
@@ -176,7 +208,8 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                ;; configuration problem. we should probably log an
                ;; error and give up.
                (dissoc :data)
-               (assoc :file-save-failed true))))))
+               (assoc :file-save-failed true)
+               (assoc :completion-date (now)))))))
 
 (defn download-agent-attempt-download [state]
   (if (< (:download-attempt state) 5)
@@ -198,7 +231,8 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
               (assoc :data (:body response))))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
-        (assoc :download-failed true))))
+        (assoc :download-failed true)
+        (assoc :completion-date (now)))))
 
 
 ;; Store all download files in a cache data structure. The cache
@@ -277,6 +311,18 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           (println k (k a)))))))
 
 
+(defn newest-cache-entry-with-name
+  [feed-name refresh-date cache]
+  (let [entries-with-name (filter (fn [c]
+                                    (= feed-name (:feed-name c)))
+                                  (map deref cache)) 
+        finished-entries (filter (fn [c]
+                                   (when-let [d (:checked-date c)]
+                                     (.before refresh-date d)))
+                                 entries-with-name)]
+    [entries-with-name finished-entries]))
+
+
 ;;; TODO: ultimately we can verify a download succeeded by checking if
 ;;; the result is a zip file which represents a more-or-less valid
 ;;; GTFS feed.
@@ -287,21 +333,13 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 (defn download-agent-next-state [state]
   (cond
-   ;; file has been saved?
-   ;; we're done, and the download succeeded.
-   (:file-saved state) state
-   ;; file save failure, or download failure?
-   ;; we're done, but the download didn't work.
-   (or (:download-failed state)
-       (:file-save-failed state))  state
-      (:file-save-failed state) state
+   ;; we're done, nothing more to do.
+   (download-agent-completed? state) state
+
    ;; we have data? try and save it to a file.
-   (:data state) (do (println 'next-state)
-                     (send-off *agent* download-agent-next-state)
-                     (println 'save)
-                     (download-agent-save-file state)) 
-   ;; we just started, OK try a download.
-   (:download-attempt state) (do (println 'next-state)
-                                 (send-off *agent* download-agent-next-state)
-                                 (println 'download)
+   (:data state) (do (send-off *agent* download-agent-next-state)
+                     (download-agent-save-file state))
+   
+   ;; we just started, try a download.
+   (:download-attempt state) (do (send-off *agent* download-agent-next-state)
                                  (download-agent-attempt-download state))))
