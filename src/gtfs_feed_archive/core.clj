@@ -180,6 +180,9 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
        (when-let [d (:completion-date state)]
          (not (.before d earliest-date)))))
 
+(defn download-agent-has-feed-name? [feed-name state]
+  (= (:feed-name state) feed-name))
+
 (defn now 
   "We're looking at now, now. This is now."
   [] (java.util.Date.))
@@ -300,7 +303,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                          date)]
     (send-off cache-manager fetch-feed! f)))
 
-
 (defn show-cache-manager-info []
   (doseq [a @cache-manager]
     (let [a (deref a)]
@@ -310,17 +312,31 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
-
-(defn newest-cache-entry-with-name
+(defn cache-search-example
+  "Find cache entires which have feed-name, and also the subset
+  which have completed after refresh-date."
   [feed-name refresh-date cache]
-  (let [entries-with-name (filter (fn [c]
-                                    (= feed-name (:feed-name c)))
+  (let [entries-with-name (filter (partial cache-entry-has-name? feed-name)
                                   (map deref cache)) 
-        finished-entries (filter (fn [c]
-                                   (when-let [d (:checked-date c)]
-                                     (.before refresh-date d)))
-                                 entries-with-name)]
-    [entries-with-name finished-entries]))
+        finished-agents (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
+                                                  (partial download-agent-completed-after? refresh-date))
+                                      deref)
+                                cache)
+        running-agents (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
+                                                 (partial download-agent-still-running?))
+                                     deref)
+                               cache)
+        all-of-the-above (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
+                                                   (some-fn (partial download-agent-completed-after?
+                                                                     refresh-date)
+                                                            download-agent-still-running?) )
+                                       deref)
+                                 cache)]
+    ;; then I suppose we can reduce finished-entries to find the one which has newest data?
+    [entries-with-name
+     finished-agents
+     running-agents
+     all-of-the-above]))
 
 
 ;;; TODO: ultimately we can verify a download succeeded by checking if
