@@ -238,6 +238,27 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         (assoc :completion-date (now)))))
 
 
+;;; TODO: ultimately we can verify a download succeeded by checking if
+;;; the result is a zip file which represents a more-or-less valid
+;;; GTFS feed.
+;;;
+;;; If not we should probably punt with an information message to the
+;;; user, since we may simply be using the wrong URL or the file may be
+;;; corrupt.
+
+(defn download-agent-next-state [state]
+  (cond
+   ;; we're done, nothing more to do.
+   (download-agent-completed? state) state
+
+   ;; we have data? try and save it to a file.
+   (:data state) (do (send-off *agent* download-agent-next-state)
+                     (download-agent-save-file state))
+   
+   ;; we just started, try a download.
+   (:download-attempt state) (do (send-off *agent* download-agent-next-state)
+                                 (download-agent-attempt-download state))))
+
 ;; Store all download files in a cache data structure. The cache
 ;; is (TODO) populated on startup by reading a cache directory,
 ;; modified by clients sending actions, and can be observed by a
@@ -312,50 +333,64 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
+(defn cache-search-example-2 
+  "For each feed name, find all cache entires which are either still running,
+  or which have completed after refresh-date."
+  [feed-names refresh-date cache]
+  (let [feed-name-set (into #{} feed-names)
+        feed-name-in-set? (fn [state] (feed-name-set (:feed-name state)))]
+    (filter (comp (every-pred feed-name-in-set?
+                              (some-fn (partial download-agent-completed-after?
+                                                refresh-date)
+                                       download-agent-still-running?) )
+                  deref)
+            cache)))
+
+
+(defn feed-succeeded-after-date?
+  [feed-name refresh-date download-agents] 
+  (some (every-pred (partial download-agent-has-feed-name? feed-name)
+                    download-agent-success?
+                    (partial download-agent-completed-after? refresh-date))
+        (map deref download-agents)))
+
+ 
+(defn all-feeds-succeeded-after-date?
+  [feed-names refresh-date download-agents]
+  (every? (fn [feed-name]
+            (feed-succeeded-after-date? feed-name refresh-date download-agents) )
+          feed-names))
+
+(defn all-feeds-succeeded-example "example for testing"
+  []
+  (pprint (all-feeds-succeeded-after-date? '("sample" "broken")
+                                           #inst "2012"
+                                           @cache-manager)) 
+  (pprint (all-feeds-succeeded-after-date? '("sample" "broken" "error")
+                                           #inst "2012"
+                                           @cache-manager)))
+
 (defn cache-search-example
   "Find cache entires which have feed-name, and also the subset
   which have completed after refresh-date."
   [feed-name refresh-date cache]
-  (let [entries-with-name (filter (partial cache-entry-has-name? feed-name)
-                                  (map deref cache)) 
-        finished-agents (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
+  (let [finished-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
                                                   (partial download-agent-completed-after? refresh-date))
                                       deref)
                                 cache)
-        running-agents (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
+        running-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
                                                  (partial download-agent-still-running?))
                                      deref)
                                cache)
-        all-of-the-above (filter (comp (every-pred (partial cache-entry-has-name? feed-name)
-                                                   (some-fn (partial download-agent-completed-after?
-                                                                     refresh-date)
-                                                            download-agent-still-running?) )
-                                       deref)
-                                 cache)]
+        running-and-finished (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
+                                                       (some-fn (partial download-agent-completed-after?
+                                                                         refresh-date)
+                                                                download-agent-still-running?) )
+                                           deref)
+                                     cache)]
     ;; then I suppose we can reduce finished-entries to find the one which has newest data?
-    [entries-with-name
-     finished-agents
+    [finished-agents
      running-agents
-     all-of-the-above]))
+     running-and-finished]))
 
 
-;;; TODO: ultimately we can verify a download succeeded by checking if
-;;; the result is a zip file which represents a more-or-less valid
-;;; GTFS feed.
-;;;
-;;; If not we should probably punt with an information message to the
-;;; user, since we may simply be using the wrong URL or the file may be
-;;; corrupt.
-
-(defn download-agent-next-state [state]
-  (cond
-   ;; we're done, nothing more to do.
-   (download-agent-completed? state) state
-
-   ;; we have data? try and save it to a file.
-   (:data state) (do (send-off *agent* download-agent-next-state)
-                     (download-agent-save-file state))
-   
-   ;; we just started, try a download.
-   (:download-attempt state) (do (send-off *agent* download-agent-next-state)
-                                 (download-agent-attempt-download state))))
