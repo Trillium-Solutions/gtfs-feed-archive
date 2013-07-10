@@ -9,7 +9,7 @@
 
 ;; for development -- set local documentation source for javadoc command.
 (do 
-  (import '[clojure.java.javadoc])
+  (use 'clojure.java.javadoc)
   (dosync (ref-set clojure.java.javadoc/*local-javadocs*
                    ["/usr/share/doc/openjdk-6-doc/api"])))
 
