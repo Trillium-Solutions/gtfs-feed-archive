@@ -1,7 +1,6 @@
 (ns gtfs-feed-archive.core
   (:refer-clojure :exclude [format]) ;; I like cl-format better...
   (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
-  (:import [clojure.java.javadoc])
   (:use clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
@@ -9,8 +8,11 @@
         [clojure.pprint :rename {cl-format format}]))
 
 ;; for development -- set local documentation source for javadoc command.
-(dosync (ref-set clojure.java.javadoc/*local-javadocs*
-                 ["/usr/share/doc/openjdk-6-doc/api"]))
+(do 
+  (import '[clojure.java.javadoc])
+  (dosync (ref-set clojure.java.javadoc/*local-javadocs*
+                   ["/usr/share/doc/openjdk-6-doc/api"])))
+
 
 (def example-csv-config-text "feed_name,feed_description,feed_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
