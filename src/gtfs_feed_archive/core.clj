@@ -1,6 +1,7 @@
 (ns gtfs-feed-archive.core
   (:refer-clojure :exclude [format]) ;; I like cl-format better...
   (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
+  (:import [clojure.java.javadoc])
   (:use clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
@@ -174,7 +175,8 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   (complement download-agent-completed?))
 
 (defn download-agent-completed-after?
-  "Has a download agent completed on or after earliest-date?"
+  "Has a download agent completed on or after earliest-date?
+   Could have completed with either a success or failure state."
   [earliest-date state]
   (and (download-agent-completed? state)
        (when-let [d (:completion-date state)]
@@ -333,19 +335,26 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
+
 (defn cache-search-example-2 
-  "For each feed name, find all cache entires which are either still running,
-  or which have completed after refresh-date."
+  "For each feed name, find all download agents for those feeds, which
+   are either still running, or which have completed after refresh-date."
   [feed-names refresh-date cache]
   (let [feed-name-set (into #{} feed-names)
         feed-name-in-set? (fn [state] (feed-name-set (:feed-name state)))]
     (filter (comp (every-pred feed-name-in-set?
-                              (some-fn (partial download-agent-completed-after?
-                                                refresh-date)
+                              (some-fn (every-pred (partial download-agent-completed-after?
+                                                            refresh-date)
+                                                   download-agent-success?) 
                                        download-agent-still-running?) )
                   deref)
             cache)))
-
+(defn test-cache-search-example-2
+  []
+  (cache-search-example-2 ["sample" "broken" "mendocino"] #inst "2012" @cache-manager))
+(defn test-cache-search-example-2*
+  []
+  (cache-search-example-2 ["broken"] #inst "2012" @cache-manager))
 
 (defn feed-succeeded-after-date?
   [feed-name refresh-date download-agents] 
@@ -361,8 +370,9 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
             (feed-succeeded-after-date? feed-name refresh-date download-agents) )
           feed-names))
 
-(defn all-feeds-succeeded-example "example for testing"
+(defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
   []
+  (println "output should be: true, false")
   (pprint (all-feeds-succeeded-after-date? '("sample" "broken")
                                            #inst "2012"
                                            @cache-manager)) 
