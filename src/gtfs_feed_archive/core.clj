@@ -13,7 +13,6 @@
   (dosync (ref-set clojure.java.javadoc/*local-javadocs*
                    ["/usr/share/doc/openjdk-6-doc/api"])))
 
-
 (def example-csv-config-text "feed_name,feed_description,feed_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
 broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
@@ -86,6 +85,11 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         data (rest csv)]
     (map (partial zipmap header)
          data)))
+
+(defn public-gtfs-feeds []
+  (with-open [r (clojure.java.io/reader
+                 "./resources/oregon_public_gtfs_feeds.csv")]
+    (doall (csv->maps r))))
 
 (defn example-csv-config []
   (csv->maps example-csv-config-text))
