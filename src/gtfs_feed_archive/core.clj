@@ -409,35 +409,50 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 ;; point in time -- since new agents will not be added while we are checking,
 ;; it is easier to guarantee the process is determanistic and completes.
 (defn wait-for-fresh-feeds! [feeds freshness-date cache]
-  (let [names (into #{} (feed-names feeds)) 
-        give-up-time (java.util.Date. (+ (* 1000 3) ;; 30 seconds.
+  (let [names (into #{} (feed-names feeds))
+        agent-we-care-about? (fn [download-agent] ;; on our list of feed-names?
+                               (names (:feed-name @download-agent)))
+        agents->names (fn [agents]
+                        (into #{} (map (comp :feed-name deref)
+                                       agents)))
+        give-up-time (java.util.Date. (+ (* 1000 60) ;; 60 seconds.
                                          (.getTime (now))))]
     ;; should we track feed names, agents, or feeds? I think names.
     (loop [in-progress-feeds names
            ;; wait until we know the full list of failed feeds before returning.
            error-feeds nil 
            finished-download-agents nil]
-      (let [download-agents @cache]
+      (let [download-agents (filter agent-we-care-about? @cache)
+            any-agents-still-running (some (comp download-agent-still-running? deref)
+                                           download-agents )
+            fresh-completed-agents (filter (comp (partial download-agent-completed-after? freshness-date)
+                                                 deref)
+                                           download-agents)
+            completed-feed-names (agents->names fresh-completed-agents)
+            fresh-successful-agents (filter (comp download-agent-success? deref)
+                                            fresh-completed-agents)
+            successful-feed-names (agents->names fresh-successful-agents)
+            not-successful-feed-names (clojure.set/difference names successful-feed-names)
+            ;;successful-agents ** ;; find exactly one successful finished agent for each feed name
+            ]
         (when (.after (now) give-up-time)
           (throw (IllegalStateException. (str "Time out."))))
-        (when (nil? in-progress-feeds)
-          (if (nil? error-feeds)
+        (when-not any-agents-still-running
+          (if (empty? not-successful-feed-names)
             finished-download-agents
-            (throw (IllegalStateException. (str "These feeds had errors: " error-feeds )))))
+            (throw (IllegalStateException. (str "These feeds have not succeeded: "
+                                                not-successful-feed-names)))))
         (Thread/sleep 1000)
-        (println "completed agents:")
-        (pprint (let [all-fresh-completed-agents
-                      (filter (comp (partial download-agent-completed-after? freshness-date)
-                                    deref)
-                              download-agents)]
-                  (map #(-> %
-                            deref
-                            :feed-name)
-                       (filter #(feed-names (:feed-name (deref %)))
-                          all-fresh-completed-agents)))) 
-        (recur in-progress-feeds
+        (println "any agents still running?")
+        (pprint any-agents-still-running) 
+        (println "successful agents:")
+        (pprint successful-feed-names) 
+        (println "not yet successful agents:")
+        (pprint not-successful-feed-names) 
+        (recur (clojure.set/difference names completed-feed-names) ;; in-progress-feeds
                error-feeds
-               finished-download-agents)))))
+               :finished-feeds
+               )))))
 
 ;; returns a list of download agents with completed downloads of all feeds,
 ;; or throws an error.
