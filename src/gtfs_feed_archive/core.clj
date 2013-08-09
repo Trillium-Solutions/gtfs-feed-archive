@@ -1,6 +1,8 @@
 (ns gtfs-feed-archive.core
   (:refer-clojure :exclude [format]) ;; I like cl-format better...
   (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
+  (:require clojure.set)
+  (:require [miner.ftp :as ftp])
   (:use clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
@@ -90,9 +92,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
 (defn public-gtfs-feeds [] 
-  (with-open [r (clojure.java.io/reader
-                 "./resources/oregon_public_gtfs_feeds.csv")]
-    (doall (csv->maps r))))
+  (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv" ;; some download links are broken.
+        public-feeds-working "./resources/oregon_public_gtfs_feeds.working.csv"]
+    (with-open [r (clojure.java.io/reader public-feeds-working)]
+      (doall (csv->maps r)))))
 
 (defn example-csv-config []
   (csv->maps example-csv-config-text))
@@ -236,6 +239,17 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                (assoc :file-save-failed true)
                (assoc :completion-date (now)))))))
 
+
+;; how can we pull out a :last-modified & :data from ftp connection??
+;; fake the results to make them look like the HTTP api.
+(defn http-or-ftp-get [url]
+  (if (re-matches #"[Ff][Tt][Pp]://" url)
+    nil ;; TODO: grab via FTP
+    (try
+      (http/get url
+                {:as :byte-array})
+      (catch Exception _ nil))))
+
 (defn download-agent-attempt-download [state]
   ;; TODO -- Only attempt a download if the cache doesn't already
   ;; contain a file created at exactly the same date.  One way to
@@ -248,10 +262,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
       (Thread/sleep (* 1000 (power-of-two (:download-attempt state))))
       ;; http/get with the { :as :byte-array } option avoids text
       ;; conversion, which would corrupt our zip file.
-      (let [response (try
-                       (http/get (:url state)
-                                 {:as :byte-array})
-                       (catch Exception _ nil))]
+      (let [response (http-or-ftp-get (:url state))]
         (if (nil? response)
           (assoc state :download-attempt ;; ok, we'll try again later.
                  (inc (:download-attempt state)))
@@ -290,37 +301,52 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 ;; is (TODO) populated on startup by reading a cache directory,
 ;; modified by clients sending actions, and can be observed by a
 ;; cache-notifier.
-
+;;
+;; --> Cache entries which already existed on startup will be given an
+;; "already had it" state, the same as if we had started a download
+;; agent for a file and it turned out we already had the latest
+;; version in the cache.
+;;
+;;
 ;; Either files have already been downloaded, or they should be
 ;; downloaded in the future (in which case we start a download-agent).
 ;; Old files can be expired when new valid data is available.
-
+;;
 ;; We can report errors if files we are trying to cache cannot
 ;; be downloaded, or if they are corrupt.
-
+;;
 ;; Consumers will request files to be added to the cache (for
 ;; instance, files from a set of feeds which have been modified since
 ;; May 1st), by sending an action to the cache-manager.  Then we will
 ;; modify the cache structure such that agents are created for each
 ;; file, and start the agents.
-
+;;
 ;; When the agents complete with success, complete with error, or
 ;; hang and we time them out (= error state), a cache-notifier can
 ;; we notify the client of the result using a promise.
-
+;;
 ;; Each download agent should be responsible for updating its own
 ;; status. If an agent completes in error (or we cancel it), it is our
 ;; responsibility to reset all its data to a known-good state (for
 ;; instance, if there was a half-written file we should make sure to
 ;; erase it so it doesn't accidentally get used the next time we scan
 ;; for new cache files.
-
+;;
 ;; Clients can wait on results by starting a cache-notifier for the
 ;; set of items the consumer needs.  The cache-notifier will deliver a
 ;; promise when either the cache is ready to use, or there was a
 ;; failure downloading some of the files which were requested. It does
 ;; this by registering a watch function on the download agent for each
 ;; file it is waiting for.
+;;
+;; TODO: enforce some constraints:
+;;  (1) there can only be one running download-agent for any given URL,
+;;      so that downloads don't compete and clobber each other.
+;;      
+;;  (2) similar idea, but multiple running cache managers shouldn't
+;;      share the same cache directory. this would be most likely to
+;;      happen if we accidentally started more than one copy of the
+;;      application.
 
 (defonce cache-manager
   (agent []))
