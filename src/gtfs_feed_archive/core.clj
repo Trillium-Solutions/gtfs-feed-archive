@@ -13,7 +13,7 @@
   (dosync (ref-set clojure.java.javadoc/*local-javadocs*
                    ["/usr/share/doc/openjdk-6-doc/api"])))
 
-(def example-csv-config-text "feed_name,feed_description,feed_url
+(def example-csv-config-text "feed_name,feed_description,gtfs_zip_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
 broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
 error,broken link to test file parsing,http://localhost:1111
@@ -56,8 +56,8 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
               out (clojure.java.io/output-stream out-file)]
     (copy-binary-stream in out)))
 
-;; TODO: parametrize so contents can be a java.io.InputStream, in which case
-;; we'll loop and copy everything from the stream into the zip file.
+;; contents can be a java.io.InputStream, in which case we'll loop and
+;; copy everything from the stream into the zip file.
 (defn make-zip-file
   [output-file-name names-contents]
   (with-open [z (java.util.zip.ZipOutputStream.
@@ -66,6 +66,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
       (.putNextEntry z (java.util.zip.ZipEntry. name))
       (condp isa? (type content)
         java.io.InputStream (copy-binary-stream content z) 
+        java.lang.String (.write z (string->bytes content))
         (Class/forName "[B") (.write z content)))))
 
 (defn make-example-zip-file []
@@ -86,7 +87,9 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (map (partial zipmap header)
          data)))
 
-(defn public-gtfs-feeds []
+;; convenience function. long term we want to manage the input CSV
+;; file(s) using a user setting for which URL to grab the CSV file from.
+(defn public-gtfs-feeds [] 
   (with-open [r (clojure.java.io/reader
                  "./resources/oregon_public_gtfs_feeds.csv")]
     (doall (csv->maps r))))
@@ -120,7 +123,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   ([csv-config]
      (map (fn [e]
             (assoc e :last-update
-                   ((comp page-last-modified :feed-url) e)))
+                   ((comp page-last-modified :gtfs-zip-url) e)))
           csv-config)))
 
 ;;; for instance:
@@ -129,6 +132,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn error-feeds [feed-updates]
   (filter #(nil? (:last-update %))
           feed-updates))
+
+;; for instance: (feed-names (public-gtfs-feeds))
+(defn feed-names [feeds]
+  (map :feed-name feeds))
 
 ;; for instance:
 ;; (fresh-feeds (feed-last-updates) #inst "2013-01-01")
@@ -148,7 +155,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (.substring (pr-str inst) 7 26)))
 
 (defn feed->download-agent [feed]
-  (agent {:url (:feed-url feed)
+  (agent {:url (:gtfs-zip-url feed)
           :download-attempt 0
           :feed-name (:feed-name feed)
           :feed-description (:feed-description feed) ; for debugging.
@@ -196,6 +203,13 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   [] (java.util.Date.))
 
 (defn download-agent-save-file [state]
+  ;; todo -- we should *never* overwrite an existing file here.
+  ;; that could lead to race conditions if we replace a file where
+  ;; another process is trying to use it.
+  ;; 
+  ;; RESEARCH:
+  ;; instead if the file exists it should be an error condition.
+  ;; how can clojure's output-stream let us express this?
   (let [file-name (str (:destination-dir state) "/"
                        (:feed-name state) "/"
                        (inst->rfc3339-day (:last-modified state))
@@ -223,6 +237,11 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                (assoc :completion-date (now)))))))
 
 (defn download-agent-attempt-download [state]
+  ;; TODO -- Only attempt a download if the cache doesn't already
+  ;; contain a file created at exactly the same date.  One way to
+  ;; check would be to see if the file already exists, but I think it
+  ;; would be better to consult the cache, since otherwise a partially
+  ;; downloaded invalid file would permanantly stay in the cache.
   (if (< (:download-attempt state) 5)
     (do
       ;; exponential back-off delay, 2**download-attempt seconds.
@@ -321,7 +340,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (conj manager
           d)))
 
-(defn !fetch-all-feeds! []
+(defn !fetch-test-feeds! []
   (doseq [f (feed-last-updates)]
     (send-off cache-manager fetch-feed! f)))
 
@@ -355,12 +374,17 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                                        download-agent-still-running?) )
                   deref)
             cache)))
+
+
+(defn test-cache-search-example-2-public
+  []
+  (cache-search-example-2 (map :feed-name (public-gtfs-feeds))
+                          #inst "2013-08-01"
+                          @cache-manager))
+
 (defn test-cache-search-example-2
   []
   (cache-search-example-2 ["sample" "broken" "mendocino"] #inst "2012" @cache-manager))
-(defn test-cache-search-example-2*
-  []
-  (cache-search-example-2 ["broken"] #inst "2012" @cache-manager))
 
 (defn feed-succeeded-after-date?
   [feed-name refresh-date download-agents] 
@@ -369,12 +393,77 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                     (partial download-agent-completed-after? refresh-date))
         (map deref download-agents)))
 
- 
 (defn all-feeds-succeeded-after-date?
   [feed-names refresh-date download-agents]
   (every? (fn [feed-name]
             (feed-succeeded-after-date? feed-name refresh-date download-agents) )
           feed-names))
+
+
+;; Keep polling the cache-manager until all feeds have been freshly
+;; downloaded on or after the freshness-date.  Returns a list of
+;; download agents with completed downloads of all feeds, or throws an
+;; error.
+;;
+;; Note that download-agents is a *copy* of the cache-manager at a given
+;; point in time -- since new agents will not be added while we are checking,
+;; it is easier to guarantee the process is determanistic and completes.
+(defn wait-for-fresh-feeds! [feeds freshness-date cache]
+  (let [names (into #{} (feed-names feeds)) 
+        give-up-time (java.util.Date. (+ (* 1000 3) ;; 30 seconds.
+                                         (.getTime (now))))]
+    ;; should we track feed names, agents, or feeds? I think names.
+    (loop [in-progress-feeds names
+           ;; wait until we know the full list of failed feeds before returning.
+           error-feeds nil 
+           finished-download-agents nil]
+      (let [download-agents @cache]
+        (when (.after (now) give-up-time)
+          (throw (IllegalStateException. (str "Time out."))))
+        (when (nil? in-progress-feeds)
+          (if (nil? error-feeds)
+            finished-download-agents
+            (throw (IllegalStateException. (str "These feeds had errors: " error-feeds )))))
+        (Thread/sleep 1000)
+        (println "completed agents:")
+        (pprint (let [all-fresh-completed-agents
+                      (filter (comp (partial download-agent-completed-after? freshness-date)
+                                    deref)
+                              download-agents)]
+                  (map #(-> %
+                            deref
+                            :feed-name)
+                       (filter #(feed-names (:feed-name (deref %)))
+                          all-fresh-completed-agents)))) 
+        (recur in-progress-feeds
+               error-feeds
+               finished-download-agents)))))
+
+;; returns a list of download agents with completed downloads of all feeds,
+;; or throws an error.
+(defn fetch-feeds! [feeds]
+  (let [start-time (now)]
+    (do 
+      (doseq [f feeds]
+        (send-off cache-manager fetch-feed! f))
+      (wait-for-fresh-feeds! feeds start-time cache-manager))))
+
+(defn build-public-feed-archive! []
+  (io! "writes a zip file"
+       (let [feeds (public-gtfs-feeds)
+             names (feed-names feeds)
+             archive-name "Oregon-GTFS-feeds"
+             output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip") ]
+         (try (mkdir-p (dirname output-file-name))
+              (println "gathering feed archives.")
+              (fetch-feeds! feeds)
+              (println "creating zip file.")
+              (make-zip-file output-file-name [[(str archive-name "/hello.txt")  "hello, world!\n"]])
+              (catch Exception e
+                (doall (map println ["Error while building a feed archive:"
+                                     e 
+                                     "TODO: figure out the cause, then pass this"
+                                     "error up to the User and ask them what to do."]) ))))))
 
 (defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
   []
