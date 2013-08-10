@@ -386,6 +386,23 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
+(defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
+  ;; If the modified-date is newer than the file in the cache, but by less
+  ;; than refresh-interval, the file in the cache is fresh enough.
+  ;;
+  ;; If the modified-date is newer than the file in the cache, by more than
+  ;; the refresh-interval, we should use the new copy.
+  (let [download-agents @cache-manager
+        refresh-interval (* 1000 60 60) ;; one hour
+        cutoff (java.util.Date. (- (.getTime modified-date)
+                                   refresh-interval))
+        new-enough? (fn [date]
+                      (println "date:" date "modified-date" modified-date)
+                      (.after date cutoff))]
+    (some (every-pred download-agent-success?
+                      (partial download-agent-has-feed-name? feed-name)
+                      (comp new-enough? :last-modified))
+          (map deref download-agents))))
 
 (defn cache-search-example-2 
   "For each feed name, find all download agents for those feeds, which
@@ -444,10 +461,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         give-up-time (java.util.Date. (+ (* 1000 60) ;; 60 seconds.
                                          (.getTime (now))))]
     ;; should we track feed names, agents, or feeds? I think names.
-    (loop [in-progress-feeds names
-           ;; wait until we know the full list of failed feeds before returning.
-           error-feeds nil 
-           finished-download-agents nil]
+    (loop []
       (let [download-agents (filter agent-we-care-about? @cache)
             any-agents-still-running (some (comp download-agent-still-running? deref)
                                            download-agents )
@@ -458,27 +472,31 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
             fresh-successful-agents (filter (comp download-agent-success? deref)
                                             fresh-completed-agents)
             successful-feed-names (agents->names fresh-successful-agents)
-            not-successful-feed-names (clojure.set/difference names successful-feed-names)
+            ;; These are feeds which have not succeeded YET.  As long
+            ;; as agents are still running they may suceed in the
+            ;; future!
+            unsuccessful-feed-names (clojure.set/difference names successful-feed-names)
+            some-broken-feeds (and (not any-agents-still-running)
+                                   (seq unsuccessful-feed-names)) 
+            all-feeds-ok (and (not any-agents-still-running)
+                              (empty? unsuccessful-feed-names))
+            too-late (.after (now) give-up-time)
             ;;successful-agents ** ;; find exactly one successful finished agent for each feed name
             ]
-        (when (.after (now) give-up-time)
-          (throw (IllegalStateException. (str "Time out."))))
-        (when-not any-agents-still-running
-          (if (empty? not-successful-feed-names)
-            finished-download-agents
-            (throw (IllegalStateException. (str "These feeds have not succeeded: "
-                                                not-successful-feed-names)))))
-        (Thread/sleep 1000)
-        (println "any agents still running?")
-        (pprint any-agents-still-running) 
-        (println "successful agents:")
-        (pprint successful-feed-names) 
-        (println "not yet successful agents:")
-        (pprint not-successful-feed-names) 
-        (recur (clojure.set/difference names completed-feed-names) ;; in-progress-feeds
-               error-feeds
-               :finished-feeds
-               )))))
+        (cond too-late (throw (IllegalStateException. (str "Time out."))) 
+              some-broken-feeds (throw (IllegalStateException.
+                                        (str "These feeds have not succeeded: "
+                                             unsuccessful-feed-names)))        
+              all-feeds-ok fresh-successful-agents ;; TODO: filter so we only have at most one agent per feed-name!!
+              :else (do (Thread/sleep 1000)
+                        (println "all feeds OK:" all-feeds-ok)
+                        (println "any agents still running?")
+                        (pprint any-agents-still-running) 
+                        (println "successful agents:")
+                        (pprint successful-feed-names) 
+                        (println "not yet successful agents:")
+                        (pprint unsuccessful-feed-names) 
+                        (recur)))))))
 
 ;; returns a list of download agents with completed downloads of all feeds,
 ;; or throws an error.
