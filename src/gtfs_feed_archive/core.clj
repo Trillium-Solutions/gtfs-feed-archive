@@ -396,12 +396,12 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         refresh-interval (* 1000 60 60) ;; one hour
         cutoff (java.util.Date. (- (.getTime modified-date)
                                    refresh-interval))
-        new-enough? (fn [date]
+        fresh-enough? (fn [date]
                       (println "date:" date "modified-date" modified-date)
                       (.after date cutoff))]
     (some (every-pred download-agent-success?
                       (partial download-agent-has-feed-name? feed-name)
-                      (comp new-enough? :last-modified))
+                      (comp fresh-enough? :last-modified))
           (map deref download-agents))))
 
 (defn cache-search-example-2 
