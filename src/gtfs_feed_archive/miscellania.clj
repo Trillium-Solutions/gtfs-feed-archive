@@ -1,13 +1,5 @@
 (ns gtfs-feed-archive.miscellania
-  (:refer-clojure :exclude [format]) ;; I like cl-format better...
-  (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
-  (:require clojure.set)
-  (:use gtfs-feed-archive.core
-        clojure.test
-        clojure-csv.core
-        [clj-http.client :rename {get http-get}]
-        [clojure.pprint :only [pprint]] 
-        [clojure.pprint :rename {cl-format format}]))
+  (:require gtfs-feed-archive.core))
 
 (def example-csv-config-text "feed_name,feed_description,gtfs_zip_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
@@ -21,10 +13,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 
 (defn example-csv-config []
-  (csv->maps example-csv-config-text))
+  (gtfs-feed-archive.core/csv->maps example-csv-config-text))
 
 (defn make-example-zip-file []
-  (make-zip-file "/tmp/foo.zip"
+  (gtfs-feed-archive.core/make-zip-file "/tmp/foo.zip"
                  [["foo/foo.txt" (string->bytes "foo\n")]
                   ["foo/bar.txt" (string->bytes "bar\n")]
                   ["foo/baz.txt" (string->bytes "baz\n")]]))
@@ -32,10 +24,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
   []
   (println "output should be: true, false")
-  (pprint (all-feeds-succeeded-after-date? '("sample" "broken")
+  (pprint (gtfs-feed-archive.core/all-feeds-succeeded-after-date? '("sample" "broken")
                                            #inst "2012"
                                            @cache-manager)) 
-  (pprint (all-feeds-succeeded-after-date? '("sample" "broken" "error")
+  (pprint (gtfs-feed-archive.core/all-feeds-succeeded-after-date? '("sample" "broken" "error")
                                            #inst "2012"
                                            @cache-manager)))
 
@@ -64,6 +56,14 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   []
   (cache-search-example-2 ["sample" "broken" "mendocino"] #inst "2012" @cache-manager))
 
+(defn feed-last-updates
+  ([]
+     (feed-last-updates (example-csv-config)))
+  ([csv-config]
+     (map (fn [e]
+            (assoc e :last-update
+                   ((comp page-last-modified :gtfs-zip-url) e)))
+          csv-config)))
 
 (defn !fetch-test-feeds! []
   (doseq [f (feed-last-updates)]

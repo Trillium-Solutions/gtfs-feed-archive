@@ -10,6 +10,8 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
+(def t true);; for cl-format.
+
 ;; for development -- set local documentation source for javadoc command.
 (do 
   (use 'clojure.java.javadoc)
@@ -89,6 +91,7 @@
       (get-in [:headers "last-modified"])
       java.util.Date.))
 
+;; TODO: make a version which works for FTP URLs
 (defn page-last-modified [url]
   (try 
     (last-modified (http/head url))
@@ -131,6 +134,8 @@
   (if (nil? inst)
     nil
     (.substring (pr-str inst) 7 26)))
+
+(declare cache-has-a-fresh-enough-copy?)
 
 (defn feed->download-agent [feed]
   (agent {:url (:gtfs-zip-url feed)
@@ -221,6 +226,8 @@
   (if (re-matches #"[Ff][Tt][Pp]://" url)
     nil ;; TODO: grab via FTP
     (try
+      ;; http/get with the { :as :byte-array } option avoids text
+      ;; conversion, which would corrupt our zip file.
       (http/get url
                 {:as :byte-array})
       (catch Exception _ nil))))
@@ -235,16 +242,38 @@
     (do
       ;; exponential back-off delay, 2**download-attempt seconds.
       (Thread/sleep (* 1000 (power-of-two (:download-attempt state))))
-      ;; http/get with the { :as :byte-array } option avoids text
-      ;; conversion, which would corrupt our zip file.
-      (let [response (http-or-ftp-get (:url state))]
-        (if (nil? response)
-          (assoc state :download-attempt ;; ok, we'll try again later.
-                 (inc (:download-attempt state)))
-          (-> state 
-              (dissoc :download-attempt)
-              (assoc :last-modified (last-modified response))
-              (assoc :data (:body response))))))
+
+      ;; poll the server to find the modification-time of the gtfs-zip-url
+      ;; TODO: integrate this into our decision-making.
+      (let [modification-time (page-last-modified (:url state))]
+        (if (nil? modification-time) 
+          ;; TODO: Increment download-attempt & return. What to do if
+          ;; server simply doesn't support asking for the
+          ;; modification-time?  Currently we would just bail here.
+          (do (format t "I was not able to find the modification-time of ~A~%" (:url state))
+              (assoc state :download-attempt ;; ok, we'll try again later.
+                     (inc (:download-attempt state))))
+          (if-let [fresh-copy (cache-has-a-fresh-enough-copy? (:feed-name state)
+                                                              modification-time)] 
+            (do (format t "Cache already contains a fresh-enough copy of ~A~%" (:feed-name state))
+                (:file-name fresh-copy) 
+                (-> state 
+                    (dissoc :download-attempt)
+                    (assoc :file-name (:file-name fresh-copy)) ;; copy the file name
+                    (assoc :last-modified (:last-modified fresh-copy)) ;; and modification time
+                    ;; for debugging, so we know which are original download agents:
+                    (assoc :im-just-a-copy true) 
+                    (assoc :completion-date (now))
+                    (assoc :file-saved true)))
+            (let [response (http-or-ftp-get (:url state))]
+              (format t "Cache does not contain a fresh-enough copy of ~A, downloading.~%" (:feed-name state))
+              (if (nil? response)
+                (assoc state :download-attempt ;; ok, we'll try again later.
+                       (inc (:download-attempt state)))
+                (-> state 
+                    (dissoc :download-attempt)
+                    (assoc :last-modified (last-modified response))
+                    (assoc :data (:body response)))))))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
         (assoc :download-failed true)
@@ -330,16 +359,30 @@
 (defn !reset-cache-manager! []
   (def cache-manager (agent [])))
 
+
+(defn feed-already-has-running-download-agent? [feed-name manager]
+  (some (every-pred download-agent-still-running?
+                    (partial download-agent-has-feed-name? feed-name))
+        (map deref manager)))
+
 ;;; This could be called "refresh feed" or "fetch feed"? Since, the
 ;;; cache could already have an older copy of the feed; in fact the
 ;;; older copy may still be current.
 ;;;
 ;;; usage: (send-off cache-manager fetch-feed! feed)
 (defn fetch-feed! [manager feed]
-  (let [d (feed->download-agent feed)]
-    (send-off d download-agent-next-state)
-    (conj manager
-          d)))
+  (let [d (feed->download-agent feed)
+        feed-name (:feed-name feed)]
+    ;; potential race condition here. I think its okay since the agent should always
+    ;; move monotonically from running -> not running, and a false positive only
+    ;; means we won't run another download immediately.
+    (if (feed-already-has-running-download-agent? feed-name
+                                                  manager)
+      (do (format t "Download agent already running for ~A, not starting a new one.~%"
+                  feed-name)
+          manager)
+      (do (send-off d download-agent-next-state)
+          (conj manager d)))))
 
 (defn show-cache-manager-info []
   (doseq [a @cache-manager]
@@ -350,23 +393,16 @@
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
-(defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
-  ;; If the modified-date is newer than the file in the cache, but by less
-  ;; than refresh-interval, the file in the cache is fresh enough.
-  ;;
-  ;; If the modified-date is newer than the file in the cache, by more than
-  ;; the refresh-interval, we should use the new copy.
-  (let [download-agents @cache-manager
-        refresh-interval (* 1000 60 60) ;; one hour
-        cutoff (java.util.Date. (- (.getTime modified-date)
-                                   refresh-interval))
-        fresh-enough? (fn [date]
-                      (println "date:" date "modified-date" modified-date)
-                      (.after date cutoff))]
-    (some (every-pred download-agent-success?
-                      (partial download-agent-has-feed-name? feed-name)
-                      (comp fresh-enough? :last-modified))
-          (map deref download-agents))))
+
+(defn clean-cache-example! "example cache cleaning code"
+  [] 
+  (send-off cache-manager
+            (fn [manager]
+              (remove (comp (partial download-agent-has-feed-name? "trimet-portland-or-us")
+                            deref)
+                      manager)))) 
+
+
 
 
 (defn feed-succeeded-after-date?
@@ -381,6 +417,24 @@
   (every? (fn [feed-name]
             (feed-succeeded-after-date? feed-name refresh-date download-agents) )
           feed-names))
+
+(defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
+  ;; If the modified-date is newer than the file in the cache, but by less
+  ;; than refresh-interval, the file in the cache is fresh enough.
+  ;;
+  ;; If the modified-date is newer than the file in the cache, by more than
+  ;; the refresh-interval, we should use the new copy.
+  (let [download-agents @cache-manager
+        refresh-interval (* 1000 60 60) ;; one hour
+        cutoff (java.util.Date. (- (.getTime modified-date)
+                                   refresh-interval))
+        fresh-enough? (fn [date]
+                        ;;(println "date:" date "modified-date" modified-date)
+                        (.after date cutoff))]
+    (first (filter (every-pred download-agent-success?
+                               (comp fresh-enough? :last-modified)
+                               (partial download-agent-has-feed-name? feed-name))
+                   (map deref download-agents)))))
 
 
 ;; Keep polling the cache-manager until all feeds have been freshly
@@ -427,7 +481,8 @@
               some-broken-feeds (throw (IllegalStateException.
                                         (str "These feeds have not succeeded: "
                                              unsuccessful-feed-names)))        
-              all-feeds-ok fresh-successful-agents ;; TODO: filter so we only have at most one agent per feed-name!!
+              ;; TODO: filter so we return at most one agent per feed-name!!
+              all-feeds-ok fresh-successful-agents
               :else (do (Thread/sleep 1000)
                         (println "all feeds OK:" all-feeds-ok)
                         (println "any agents still running?")
@@ -463,7 +518,6 @@
                                      e 
                                      "TODO: figure out the cause, then pass this"
                                      "error up to the User and ask them what to do."]) ))))))
-
 
 
 
