@@ -466,27 +466,6 @@
 
 
 
-(defn cache-search-example
-  "Find cache entires which have feed-name, and also the subset
-  which have completed after refresh-date."
-  [feed-name refresh-date cache]
-  (let [finished-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                  (partial download-agent-completed-after? refresh-date))
-                                      deref)
-                                cache)
-        running-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                 (partial download-agent-still-running?))
-                                     deref)
-                               cache)
-        running-and-finished (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                       (some-fn (partial download-agent-completed-after?
-                                                                         refresh-date)
-                                                                download-agent-still-running?) )
-                                           deref)
-                                     cache)]
-    ;; then I suppose we can reduce finished-entries to find the one which has newest data?
-    [finished-agents
-     running-agents
-     running-and-finished]))
+
 
 
