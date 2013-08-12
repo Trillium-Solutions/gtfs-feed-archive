@@ -3,7 +3,8 @@
   (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
   (:require clojure.set)
   (:require [miner.ftp :as ftp])
-  (:use clojure.test
+  (:use 
+        clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
         [clojure.pprint :only [pprint]] 
@@ -15,15 +16,6 @@
   (dosync (ref-set clojure.java.javadoc/*local-javadocs*
                    ["/usr/share/doc/openjdk-6-doc/api"])))
 
-(def example-csv-config-text "feed_name,feed_description,gtfs_zip_url
-sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
-broken,testing feed with intentionally broken data,http://localhost/gtfs-examples/broken-feed/gtfs.zip
-error,broken link to test file parsing,http://localhost:1111
-mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-authority/mendocino-transit-authority_20121230_0426.zip")
-
-;; kingcounty,King County Seattle Metro,http://localhost/gtfs-examples/kingcounty/kingcounty-archiver_20130206_0431.zip
-;; trimet,Tri-Met: Portland Metro,http://developer.trimet.org/schedule/gtfs.zip
-;; cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip
 
 (defn keyword-with-dashes
   "convert a string to a keyword replacing '_' with '-'"
@@ -71,11 +63,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
         java.lang.String (.write z (string->bytes content))
         (Class/forName "[B") (.write z content)))))
 
-(defn make-example-zip-file []
-  (make-zip-file "/tmp/foo.zip"
-                 [["foo/foo.txt" (string->bytes "foo\n")]
-                  ["foo/bar.txt" (string->bytes "bar\n")]
-                  ["foo/baz.txt" (string->bytes "baz\n")]]))
 
 (defn file->bytes [input-file-name]
   (clojure.java.io/input-stream input-file-name))
@@ -97,9 +84,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (with-open [r (clojure.java.io/reader public-feeds-working)]
       (doall (csv->maps r)))))
 
-(defn example-csv-config []
-  (csv->maps example-csv-config-text))
-
 (defn last-modified [response]
   (-> response
       (get-in [:headers "last-modified"])
@@ -120,15 +104,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn page-size "size of data at URL" [url]
   (count (page-data url)))
 
-(defn feed-last-updates
-  ([]
-     (feed-last-updates (example-csv-config)))
-  ([csv-config]
-     (map (fn [e]
-            (assoc e :last-update
-                   ((comp page-last-modified :gtfs-zip-url) e)))
-          csv-config)))
-
 ;;; for instance:
 ;;; (error-feeds (feed-last-updates (example-csv-config))) 
 ;;;  => ({:last-update nil, :feed-name "error"})
@@ -147,7 +122,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                       #(.after (:last-update %) date))
           feed-updates))
 
-(defn -main [] (feed-last-updates))
+(defn -main [] 'run-command-line-application)
 
 (defn inst->rfc3339-day
   "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
@@ -366,17 +341,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     (conj manager
           d)))
 
-(defn !fetch-test-feeds! []
-  (doseq [f (feed-last-updates)]
-    (send-off cache-manager fetch-feed! f)))
-
-;; For instance
-;; (!fetch-fresh-feeds! #inst "2012")
-(defn !fetch-fresh-feeds! [date]
-  (doseq [f (fresh-feeds (feed-last-updates)
-                         date)]
-    (send-off cache-manager fetch-feed! f)))
-
 (defn show-cache-manager-info []
   (doseq [a @cache-manager]
     (let [a (deref a)]
@@ -404,30 +368,6 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                       (comp fresh-enough? :last-modified))
           (map deref download-agents))))
 
-(defn cache-search-example-2 
-  "For each feed name, find all download agents for those feeds, which
-   are either still running, or which have completed after refresh-date."
-  [feed-names refresh-date cache]
-  (let [feed-name-set (into #{} feed-names)
-        feed-name-in-set? (fn [state] (feed-name-set (:feed-name state)))]
-    (filter (comp (every-pred feed-name-in-set?
-                              (some-fn (every-pred (partial download-agent-completed-after?
-                                                            refresh-date)
-                                                   download-agent-success?) 
-                                       download-agent-still-running?) )
-                  deref)
-            cache)))
-
-
-(defn test-cache-search-example-2-public
-  []
-  (cache-search-example-2 (map :feed-name (public-gtfs-feeds))
-                          #inst "2013-08-01"
-                          @cache-manager))
-
-(defn test-cache-search-example-2
-  []
-  (cache-search-example-2 ["sample" "broken" "mendocino"] #inst "2012" @cache-manager))
 
 (defn feed-succeeded-after-date?
   [feed-name refresh-date download-agents] 
@@ -524,15 +464,7 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
                                      "TODO: figure out the cause, then pass this"
                                      "error up to the User and ask them what to do."]) ))))))
 
-(defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
-  []
-  (println "output should be: true, false")
-  (pprint (all-feeds-succeeded-after-date? '("sample" "broken")
-                                           #inst "2012"
-                                           @cache-manager)) 
-  (pprint (all-feeds-succeeded-after-date? '("sample" "broken" "error")
-                                           #inst "2012"
-                                           @cache-manager)))
+
 
 (defn cache-search-example
   "Find cache entires which have feed-name, and also the subset
