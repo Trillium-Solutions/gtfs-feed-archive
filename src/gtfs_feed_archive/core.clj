@@ -1,56 +1,17 @@
 (ns gtfs-feed-archive.core
   (:refer-clojure :exclude [format]) ;; I like cl-format better...
-  (:require [clj-http.client :as http]) ;; docs at https://github.com/dakrone/clj-http
-  (:require clojure.set)
-  (:require [miner.ftp :as ftp])
-  (:use 
+  (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
+            clojure.set
+            [miner.ftp :as ftp]
+            [gtfs-feed-archive.javadoc-helper :as javadoc-helper]) 
+  (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
         [clj-http.client :rename {get http-get}]
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
-(def t true);; for cl-format.
-
-;; for development -- set local documentation source for javadoc command.
-(do 
-  (use 'clojure.java.javadoc)
-  (dosync (ref-set clojure.java.javadoc/*local-javadocs*
-                   ["/usr/share/doc/openjdk-6-doc/api"])))
-
-
-(defn keyword-with-dashes
-  "convert a string to a keyword replacing '_' with '-'"
-  [string]
-  (keyword (clojure.string/replace string "_" "-")))
-
-(defn methods-of-java-object
-  "For repl development. Finds methods of a java object."
-  [obj]
-  (-> obj (class) (.getDeclaredMethods) (seq)))
-
-(defn string->bytes [s]
-  "Convert a string into an array of bytes."
-  (byte-array (map byte s)))
-
-(defn power-of-two "nth power of 2" [n] (int (Math/pow 2 n)))
-
-(defn copy-binary-stream [^java.io.InputStream in
-                          ^java.io.OutputStream out]
-  "Buffered copy of in-stream to out-stream."
-  (let [^bytes buffer (byte-array (power-of-two 14))]
-    (loop []
-      (let [nread (.read in buffer)]
-        (format true "nread: ~a~%" nread)
-        (when (pos? nread)
-          (.write out buffer 0 nread)
-          (recur))))))
-
-(defn copy-binary-file "Example code for binary file copy."
-  [in-file out-file]
-  (with-open [in (clojure.java.io/input-stream in-file)
-              out (clojure.java.io/output-stream out-file)]
-    (copy-binary-stream in out)))
+(javadoc-helper/set-local-documentation-source)
 
 ;; contents can be a java.io.InputStream, in which case we'll loop and
 ;; copy everything from the stream into the zip file.
@@ -64,19 +25,6 @@
         java.io.InputStream (copy-binary-stream content z) 
         java.lang.String (.write z (string->bytes content))
         (Class/forName "[B") (.write z content)))))
-
-
-(defn file->bytes [input-file-name]
-  (clojure.java.io/input-stream input-file-name))
-
-(defn csv->maps
-  "Turn a CSV string (with headers) into a list of maps from header->data."
-  [string]
-  (let [csv (parse-csv string)
-        header (map keyword-with-dashes (first csv))
-        data (rest csv)]
-    (map (partial zipmap header)
-         data)))
 
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
@@ -127,14 +75,6 @@
 
 (defn -main [] 'run-command-line-application)
 
-(defn inst->rfc3339-day
-  "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
-  [inst]
-  ;; funny that there's no function to do this already?
-  (if (nil? inst)
-    nil
-    (.substring (pr-str inst) 7 26)))
-
 (declare cache-has-a-fresh-enough-copy?)
 
 (defn feed->download-agent [feed]
@@ -180,10 +120,6 @@
 
 (defn download-agent-has-feed-name? [feed-name state]
   (= (:feed-name state) feed-name))
-
-(defn now 
-  "We're looking at now, now. This is now."
-  [] (java.util.Date.))
 
 (defn download-agent-save-file [state]
   ;; todo -- we should *never* overwrite an existing file here.
@@ -259,10 +195,11 @@
                 (:file-name fresh-copy) 
                 (-> state 
                     (dissoc :download-attempt)
-                    (assoc :file-name (:file-name fresh-copy)) ;; copy the file name
-                    (assoc :last-modified (:last-modified fresh-copy)) ;; and modification time
+                    (dissoc :destination-dir) 
                     ;; for debugging, so we know which are original download agents:
                     (assoc :im-just-a-copy true) 
+                    (assoc :file-name (:file-name fresh-copy)) ;; copy the file name
+                    (assoc :last-modified (:last-modified fresh-copy)) ;; and modification time
                     (assoc :completion-date (now))
                     (assoc :file-saved true)))
             (let [response (http-or-ftp-get (:url state))]
@@ -401,9 +338,6 @@
               (remove (comp (partial download-agent-has-feed-name? "trimet-portland-or-us")
                             deref)
                       manager)))) 
-
-
-
 
 (defn feed-succeeded-after-date?
   [feed-name refresh-date download-agents] 
