@@ -13,10 +13,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 
 
 (defn example-csv-config []
-  (gtfs-feed-archive.core/csv->maps example-csv-config-text))
+  (csv->maps example-csv-config-text))
 
 (defn make-example-zip-file []
-  (gtfs-feed-archive.core/make-zip-file "/tmp/foo.zip"
+  (make-zip-file "/tmp/foo.zip"
                  [["foo/foo.txt" (string->bytes "foo\n")]
                   ["foo/bar.txt" (string->bytes "bar\n")]
                   ["foo/baz.txt" (string->bytes "baz\n")]]))
@@ -24,10 +24,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 (defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
   []
   (println "output should be: true, false")
-  (pprint (gtfs-feed-archive.core/all-feeds-succeeded-after-date? '("sample" "broken")
+  (pprint (all-feeds-succeeded-after-date? '("sample" "broken")
                                            #inst "2012"
                                            @cache-manager)) 
-  (pprint (gtfs-feed-archive.core/all-feeds-succeeded-after-date? '("sample" "broken" "error")
+  (pprint (all-feeds-succeeded-after-date? '("sample" "broken" "error")
                                            #inst "2012"
                                            @cache-manager)))
 
