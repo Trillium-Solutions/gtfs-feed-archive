@@ -3,7 +3,8 @@
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
             [miner.ftp :as ftp]
-            [gtfs-feed-archive.javadoc-helper :as javadoc-helper]) 
+            [gtfs-feed-archive.javadoc-helper :as javadoc-helper]
+            [gtfs-feed-archive.cache-persistance :as cache-persistance]) 
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
@@ -12,6 +13,15 @@
         [clojure.pprint :rename {cl-format format}]))
 
 (javadoc-helper/set-local-documentation-source)
+
+(defn csv->maps
+  "Turn a CSV string (with headers) into a list of maps from header->data."
+  [string]
+  (let [csv (parse-csv string)
+        header (map keyword-with-dashes (first csv))
+        data (rest csv)]
+    (map (partial zipmap header)
+         data)))
 
 ;; contents can be a java.io.InputStream, in which case we'll loop and
 ;; copy everything from the stream into the zip file.

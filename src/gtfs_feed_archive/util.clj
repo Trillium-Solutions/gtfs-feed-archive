@@ -37,16 +37,6 @@
               out (clojure.java.io/output-stream out-file)]
     (copy-binary-stream in out)))
 
-
-(defn csv->maps
-  "Turn a CSV string (with headers) into a list of maps from header->data."
-  [string]
-  (let [csv (parse-csv string)
-        header (map keyword-with-dashes (first csv))
-        data (rest csv)]
-    (map (partial zipmap header)
-         data)))
-
 (defn file->bytes [input-file-name]
   (clojure.java.io/input-stream input-file-name))
 
@@ -57,3 +47,8 @@
   (if (nil? inst)
     nil
     (.substring (pr-str inst) 7 26)))
+
+(defn now 
+  "We're looking at now, now. This is now."
+  [] (java.util.Date.))
+
