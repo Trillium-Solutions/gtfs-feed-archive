@@ -40,7 +40,9 @@
 ;; file(s) using a user setting for which URL to grab the CSV file from.
 (defn public-gtfs-feeds [] 
   (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv" ;; some download links are broken.
-        public-feeds-working "./resources/oregon_public_gtfs_feeds.working.csv"]
+        public-feeds-working "./resources/oregon_public_gtfs_feeds.working.csv" ;; all working feeds.
+        public-feeds-smaller "./resources/oregon_public_gtfs_feeds.smaller.csv" ;; smaller feeds only.
+        ]
     (with-open [r (clojure.java.io/reader public-feeds-working)]
       (doall (csv->maps r)))))
 
