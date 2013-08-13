@@ -441,10 +441,6 @@
 ;; downloaded on or after the freshness-date.  Returns a list of
 ;; download agents with completed downloads of all feeds, or throws an
 ;; error.
-;;
-;; Note that download-agents is a *copy* of the cache-manager at a given
-;; point in time -- since new agents will not be added while we are checking,
-;; it is easier to guarantee the process is determanistic and completes.
 (defn wait-for-fresh-feeds! [feeds freshness-date cache]
   (let [names (into #{} (feed-names feeds))
         agent-we-care-about? (fn [download-agent] ;; on our list of feed-names?
