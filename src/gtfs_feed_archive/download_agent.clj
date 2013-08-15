@@ -9,21 +9,18 @@
         [clojure.pprint :rename {cl-format format}]))
 
 ;; Function of (feed-name modified-date), which tries to pull "good
-;; enough" copy of the feed, from a cache.
-(def ^:dynamic close-enough-cache-hit? 
-  (fn [feed-name modified-date] nil))
+;; enough" copy of the feed, from a cache.  Our caller binds this
+;; dynamic variable for us. Yes it's a little ugly but it appears to
+;; be the Clojure Way.
+(def ^:dynamic close-enough-cache-hit? nil)
 
-(defn make-from-feed [feed close-enough-cache-hit-fn]
-  ;; TODO: saving the close-enough-cache-hit? function in each agent
-  ;; complicates load/save. So would including a link to the cache manager.
-  ;; instead, a dynamic extent global function might actually be better.
-  (binding [close-enough-cache-hit? close-enough-cache-hit-fn]
-    (agent { 
-            :url (:gtfs-zip-url feed)
-            :download-attempt 0
-            :feed-name (:feed-name feed)
-            :feed-description (:feed-description feed) ; for debugging.
-            :destination-dir "/tmp/gtfs-cache/"})))
+(defn make-from-feed [feed]
+  (agent {
+          :url (:gtfs-zip-url feed)
+          :download-attempt 0
+          :feed-name (:feed-name feed)
+          :feed-description (:feed-description feed) ; for debugging.
+          :destination-dir "/tmp/gtfs-cache/"}))
 
 (defn success? [state]
   "Has the file been saved?"
@@ -55,8 +52,6 @@
 
 (defn has-feed-name? [feed-name state]
   (= (:feed-name state) feed-name))
-
-
 
 (defn save-file [state]
   ;; todo -- we should *never* overwrite an existing file here.

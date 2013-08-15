@@ -79,49 +79,6 @@
 (defn !reset-cache-manager! []
   (def cache-manager (agent [])))
 
-
-(defn feed-already-has-running-download-agent? [feed-name manager]
-  (some (every-pred download-agent/still-running?
-                    (partial download-agent/has-feed-name? feed-name))
-        (map deref manager)))
-
-;;; This could be called "refresh feed" or "fetch feed"? Since, the
-;;; cache could already have an older copy of the feed; in fact the
-;;; older copy may still be current.
-;;;
-;;; usage: (send-off cache-manager fetch-feed! feed)
-(defn fetch-feed! [manager feed]
-  (let [d (download-agent/make-from-feed feed #'cache-has-a-fresh-enough-copy?)
-        feed-name (:feed-name feed)]
-    ;; potential race condition here. I think its okay since the agent should always
-    ;; move monotonically from running -> not running, and a false positive only
-    ;; means we won't run another download immediately.
-    (if (feed-already-has-running-download-agent? feed-name
-                                                  manager)
-      (do (format t "Download agent already running for ~A, not starting a new one.~%"
-                  feed-name)
-          manager)
-      (do (send-off d download-agent/next-state)
-          (conj manager d)))))
-
-(defn show-cache-manager-info []
-  (doseq [a @cache-manager]
-    (let [a (deref a)]
-      (println "")
-      (doseq [k (keys a)]
-        (if (= k :data)
-          (println "has data of size: " (count (:data a)))
-          (println k (k a)))))))
-
-
-(defn clean-cache-example! "example cache cleaning code"
-  [] 
-  (send-off cache-manager
-            (fn [manager]
-              (remove (comp (partial download-agent/has-feed-name? "trimet-portland-or-us")
-                            deref)
-                      manager)))) 
-
 (defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
   ;; If the modified-date is newer than the file in the cache, but by less
   ;; than refresh-interval, the file in the cache is fresh enough.
@@ -140,6 +97,53 @@
                                (partial download-agent/has-feed-name? feed-name))
                    (map deref download-agents)))))
 
+
+
+
+(defn feed-already-has-running-download-agent? [feed-name manager]
+  (some (every-pred download-agent/still-running?
+                    (partial download-agent/has-feed-name? feed-name))
+        (map deref manager)))
+
+;;; This could be called "refresh feed" or "fetch feed"? Since, the
+;;; cache could already have an older copy of the feed; in fact the
+;;; older copy may still be current.
+;;;
+;;; usage: (send-off cache-manager fetch-feed! feed)
+(defn fetch-feed! [manager feed]
+  (let [d (download-agent/make-from-feed feed)
+        feed-name (:feed-name feed)]
+    ;; potential race condition here. I think its okay since the agent should always
+    ;; move monotonically from running -> not running, and a false positive only
+    ;; means we won't run another download immediately.
+    (if (feed-already-has-running-download-agent? feed-name
+                                                  manager)
+      (do (format t "Download agent already running for ~A, not starting a new one.~%"
+                  feed-name)
+          manager)
+      (do 
+        (binding [download-agent/close-enough-cache-hit?
+                  cache-has-a-fresh-enough-copy?]
+          (send-off d download-agent/next-state)) 
+        (conj manager d)))))
+
+(defn show-cache-manager-info []
+  (doseq [a @cache-manager]
+    (let [a (deref a)]
+      (println "")
+      (doseq [k (keys a)]
+        (if (= k :data)
+          (println "has data of size: " (count (:data a)))
+          (println k (k a)))))))
+
+
+(defn clean-cache-example! "example cache cleaning code"
+  [] 
+  (send-off cache-manager
+            (fn [manager]
+              (remove (comp (partial download-agent/has-feed-name? "trimet-portland-or-us")
+                            deref)
+                      manager)))) 
 
 ;; Keep polling the cache-manager until all feeds have been freshly
 ;; downloaded on or after the freshness-date.  Returns a list of

@@ -60,20 +60,6 @@
   (download-agent/make-from-feed feed
                                  #'cache-manager/cache-has-a-fresh-enough-copy?))
 
-;;; these should probably go into download-agent namespace
-(defn feed-succeeded-after-date?
-  [feed-name refresh-date download-agents] 
-  (some (every-pred (partial download-agent/has-feed-name? feed-name)
-                    download-agent/success?
-                    (partial download-agent/completed-after? refresh-date))
-        (map deref download-agents)))
-
-(defn all-feeds-succeeded-after-date?
-  [feed-names refresh-date download-agents]
-  (every? (fn [feed-name]
-            (feed-succeeded-after-date? feed-name refresh-date download-agents) )
-          feed-names))
-
 (defn build-public-feed-archive! []
   (io! "writes a zip file"
        (let [feeds (public-gtfs-feeds)
