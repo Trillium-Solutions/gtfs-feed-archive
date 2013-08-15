@@ -12,7 +12,7 @@
   [cache]
   ;; FIXME: split download-agent code into its own module so we can
   ;; include it both here and in the core module.
-  (filter download-agent-completed?
+  (filter download-agent/completed?
           (for [a @cache] @a)))
 
 (defn list->cache [lst]
@@ -49,4 +49,5 @@
         (list->cache (edn/read))))
     (catch Exception e
       ;; TODO: log an error here.
+      (println "Exception in load-cache!" e)
       nil)))

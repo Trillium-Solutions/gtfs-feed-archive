@@ -1,4 +1,9 @@
-(ns gtfs-feed-archive.util)
+(ns gtfs-feed-archive.util
+  (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
+            clojure.set
+            [miner.ftp :as ftp])
+  (:use clojure.test
+        clojure-csv.core))
 
 ;; handy utility functions.
 
@@ -58,4 +63,74 @@
 (defn mkdir-p "make directory & create parent directories as needed" [path]
   (.mkdirs (clojure.java.io/file path)))
 
+;; how can we pull out a :last-modified & :data from ftp connection??
+;; fake the results to make them look like the HTTP api.
+(defn http-or-ftp-get [url]
+  (if (re-matches #"[Ff][Tt][Pp]://" url)
+    nil ;; TODO: grab via FTP
+    (try
+      ;; http/get with the { :as :byte-array } option avoids text
+      ;; conversion, which would corrupt our zip file.
+      (http/get url
+                {:as :byte-array
+                 :force-redirects true})
+      (catch Exception _ nil))))
+
+
+(defn last-modified [response]
+  (-> response
+      (get-in [:headers "last-modified"])
+      java.util.Date.))
+
+
+;; TODO: make a version which works for FTP URLs.  May need to search
+;; for pure Java FTP library that supports the LIST command better.
+(defn page-last-modified [url]
+  (or (try 
+        ;; NOTE: HEAD with force-redirects doesn't return the
+        ;; modification-time with all servers it seems. That's why we
+        ;; fall back to a GET request.
+        (last-modified (http/head url
+                                  {:force-redirects true}))
+        (catch Exception _ nil))
+      (try 
+        (last-modified (http/get url
+                                 {;; Try to avoid downloading entire
+                                  ;; file, since we only care about
+                                  ;; the headers.
+                                  :as :stream
+                                  :force-redirects true}))
+        (catch Exception _ nil))))
+
+(defn page-data "http/get example"
+  [url]
+  (try 
+    (-> (http/get url {:as :byte-array})
+        (get :body))
+    (catch Exception _ nil)))
+
+(defn page-size "size of data at URL" [url]
+  (count (page-data url)))
+
+;; for instance: (feed-names (public-gtfs-feeds))
+(defn feed-names [feeds]
+  (map :feed-name feeds))
+
+;; for instance:
+;; (fresh-feeds (feed-last-updates) #inst "2013-01-01")
+(defn fresh-feeds [feed-updates date] ;; date is java.lang.Date
+  (filter (every-pred #(not (nil? (:last-update %)))
+                      #(.after (:last-update %) date))
+          feed-updates))
+
+
+
+(defn csv->maps
+  "Turn a CSV string (with headers) into a list of maps from header->data."
+  [string]
+  (let [csv (parse-csv string)
+        header (map keyword-with-dashes (first csv))
+        data (rest csv)]
+    (map (partial zipmap header)
+         data)))
 

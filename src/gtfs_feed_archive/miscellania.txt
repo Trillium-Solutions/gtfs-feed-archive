@@ -1,5 +1,9 @@
 (ns gtfs-feed-archive.miscellania
-  (:require gtfs-feed-archive.core))
+  (:refer-clojure :exclude [format])   ;; I like cl-format better...
+  (:require [gtfs-feed-archive.download-agent :as download-agent])
+  (:use gtfs-feed-archive.util
+        [clojure.pprint :only [pprint]] 
+        [clojure.pprint :rename {cl-format format}]))
 
 (def example-csv-config-text "feed_name,feed_description,gtfs_zip_url
 sample,Google example feed,http://localhost/gtfs-examples/sample-feed/sample-feed.zip
@@ -11,15 +15,23 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
 ;; trimet,Tri-Met: Portland Metro,http://developer.trimet.org/schedule/gtfs.zip
 ;; cherriots,Cherriots: Salem-Kaiser,http://www.cherriots.org/developer/gtfs.zip
 
-
 (defn example-csv-config []
   (csv->maps example-csv-config-text))
 
-(defn make-example-zip-file []
-  (make-zip-file "/tmp/foo.zip"
-                 [["foo/foo.txt" (string->bytes "foo\n")]
-                  ["foo/bar.txt" (string->bytes "bar\n")]
-                  ["foo/baz.txt" (string->bytes "baz\n")]]))
+;;; This should probably go into download-agent namespace, if its useful there.
+(defn feed-succeeded-after-date?
+  [feed-name refresh-date download-agents] 
+  (some (every-pred (partial download-agent/has-feed-name? feed-name)
+                    download-agent/success?
+                    (partial download-agent/completed-after? refresh-date))
+        (map deref download-agents)))
+
+(defn all-feeds-succeeded-after-date?
+  [feed-names refresh-date download-agents]
+  (every? (fn [feed-name]
+            (feed-succeeded-after-date? feed-name refresh-date download-agents) )
+          feed-names))
+
 
 (defn all-feeds-succeeded-example "example for testing. run (!fetch-all-feeds!) first."
   []
@@ -38,10 +50,10 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   (let [feed-name-set (into #{} feed-names)
         feed-name-in-set? (fn [state] (feed-name-set (:feed-name state)))]
     (filter (comp (every-pred feed-name-in-set?
-                              (some-fn (every-pred (partial download-agent-completed-after?
+                              (some-fn (every-pred (partial download-agent/completed-after?
                                                             refresh-date)
-                                                   download-agent-success?) 
-                                       download-agent-still-running?) )
+                                                   download-agent/success?) 
+                                       download-agent/still-running?) )
                   deref)
             cache)))
 
@@ -90,18 +102,18 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
   "Find cache entires which have feed-name, and also the subset
   which have completed after refresh-date."
   [feed-name refresh-date cache]
-  (let [finished-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                  (partial download-agent-completed-after? refresh-date))
+  (let [finished-agents (filter (comp (every-pred (partial download-agent/has-feed-name? feed-name)
+                                                  (partial download-agent/completed-after? refresh-date))
                                       deref)
                                 cache)
-        running-agents (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                 (partial download-agent-still-running?))
+        running-agents (filter (comp (every-pred (partial download-agent/has-feed-name? feed-name)
+                                                 (partial download-agent/still-running?))
                                      deref)
                                cache)
-        running-and-finished (filter (comp (every-pred (partial download-agent-has-feed-name? feed-name)
-                                                       (some-fn (partial download-agent-completed-after?
+        running-and-finished (filter (comp (every-pred (partial download-agent/has-feed-name? feed-name)
+                                                       (some-fn (partial download-agent/completed-after?
                                                                          refresh-date)
-                                                                download-agent-still-running?) )
+                                                                download-agent/still-running?) )
                                            deref)
                                      cache)]
     ;; then I suppose we can reduce finished-entries to find the one which has newest data?
