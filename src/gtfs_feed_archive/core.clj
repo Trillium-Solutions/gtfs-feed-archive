@@ -43,7 +43,7 @@
         public-feeds-working "./resources/oregon_public_gtfs_feeds.working.csv" ;; all working feeds.
         public-feeds-smaller "./resources/oregon_public_gtfs_feeds.smaller.csv" ;; smaller feeds only.
         ]
-    (with-open [r (clojure.java.io/reader public-feeds-working)]
+    (with-open [r (clojure.java.io/reader public-feeds-smaller)]
       (doall (csv->maps r)))))
 
 (defn last-modified [response]
@@ -95,12 +95,6 @@
           :feed-name (:feed-name feed)
           :feed-description (:feed-description feed) ; for debugging.
           :destination-dir "/tmp/gtfs-cache/"}))
-
-(defn dirname "directory component of path" [path]
-  (.getParent (clojure.java.io/file path)))
-
-(defn mkdir-p "make directory & create parent directories as needed" [path]
-  (.mkdirs (clojure.java.io/file path)))
 
 (defn download-agent-success? [state]
   "Has the file been saved?"
@@ -301,8 +295,18 @@
 ;;      happen if we accidentally started more than one copy of the
 ;;      application.
 
+(def +cache-file+ "/tmp/gtfs-cache/cache.edn")
+(def +cache-file-backup+ (str +cache-file+ ".1"))
+
 (defonce cache-manager
-  (agent []))
+  ;; TODO: verify that all files referenced in the cache exist.
+  (or (cache-persistance/load-cache! +cache-file+)
+      (agent [])))
+
+(defn save-cache-manager! []
+  (.renameTo (clojure.java.io/file +cache-file+) 
+             (clojure.java.io/file +cache-file-backup+))
+  (cache-persistance/save-cache! cache-manager +cache-file+))
 
 ;;; for debugging
 (defn !reset-cache-manager! []

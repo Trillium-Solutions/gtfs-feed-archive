@@ -52,3 +52,10 @@
   "We're looking at now, now. This is now."
   [] (java.util.Date.))
 
+(defn dirname "directory component of path" [path]
+  (.getParent (clojure.java.io/file path)))
+
+(defn mkdir-p "make directory & create parent directories as needed" [path]
+  (.mkdirs (clojure.java.io/file path)))
+
+
