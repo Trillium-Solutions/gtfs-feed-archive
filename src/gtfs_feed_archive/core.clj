@@ -6,7 +6,8 @@
             [gtfs-feed-archive.javadoc-helper :as javadoc-helper]
             [gtfs-feed-archive.cache-persistance :as cache-persistance]
             [gtfs-feed-archive.cache-manager :as cache-manager]
-            [gtfs-feed-archive.download-agent :as download-agent])
+            [gtfs-feed-archive.download-agent :as download-agent]
+            )
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
@@ -30,11 +31,6 @@
         java.lang.String (.write z (string->bytes content))
         (Class/forName "[B") (.write z content)))))
 
-
-;; example zip creation from download agent.
-(defn create-eugene-zip-file []
-  (make-zip-file "/tmp/testing-eugene.zip"
-               (download-agents->zip-file-list [ (last @cache-manager/cache-manager)] )))
 
 (defn make-example-zip-file []
   (make-zip-file "/tmp/foo.zip"
@@ -61,9 +57,19 @@
 
 (defn -main [] 'run-command-line-application)
 
-#_(defn feed->download-agent [feed]
-  (download-agent/make-from-feed feed
-                                 #'cache-manager/cache-has-a-fresh-enough-copy?))
+(defn download-agents->last-updates-csv [download-agents]
+  ;; TODO: use the CSV file writer to ensure proper quoting so strange
+  ;; names and URLs don't have a chance to break the CSV file.
+  (let [header-str "zip_file_name,most_recent_update,feed_name,historical_download_url\r\n"]
+    (reduce str
+            (for [a (map deref download-agents) ]
+              (str (str "feeds/"(:feed-name a) ".zip,")
+                   (:last-modified a) ","
+                   (:feed-name a) ","
+                   (:url a) "\r\n")))))
+
+(defn download-agents->last-updates-csv-entry [download-agents]
+  ["last_updates.csv" (download-agents->last-updates-csv download-agents)])
 
 (defn download-agents->zip-file-list
   "Build a list of file names and contents from successful download agents.
@@ -73,22 +79,29 @@
     [(str "feeds/"(:feed-name a) ".zip")
      (clojure.java.io/input-stream (:file-name a))]))
 
+(defn prepend-path-to-file-list [path zip-file-list]
+  (for [[name data] zip-file-list] 
+       [(str path "/" name) data]))
+
 (defn build-public-feed-archive! []
   (io! "writes a zip file"
        (let [feeds (public-gtfs-feeds)
              names (feed-names feeds)
-             archive-name "Oregon-GTFS-feeds"
-             output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip") ]
+             archive-name "Oregon-GTFS-feeds-2013-08-19"
+             output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip")]
          (try (mkdir-p (dirname output-file-name))
               (println "gathering feed archives.")
               (when-let [finished-agents (cache-manager/fetch-feeds! feeds)]
                 (println "creating zip file.")
-                (make-zip-file output-file-name 
-                             (download-agents->zip-file-list finished-agents)))
-              ;;(comment (make-zip-file output-file-name [[(str archive-name "/hello.txt")  "hello, world!\n"]])) 
+                (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
+                                      (download-agents->zip-file-list finished-agents))
+                      file-list-with-prefix (prepend-path-to-file-list archive-name
+                                                                       file-list)]
+                  (make-zip-file output-file-name
+                                 file-list-with-prefix)))
               (catch Exception e
                 (doall (map println ["Error while building a feed archive:"
-                                     e 
+                                     e
                                      "TODO: figure out the cause, then pass this"
                                      "error up to the User and ask them what to do."])))))))
 

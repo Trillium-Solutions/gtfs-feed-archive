@@ -2,7 +2,10 @@
   (:refer-clojure :exclude [format])   ;; I like cl-format better...
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
-            [miner.ftp :as ftp])
+            [miner.ftp :as ftp]
+            clj-time.coerce
+            clj-time.format
+            clj-time.core)
   (:use clojure.test
         clojure-csv.core
         [clojure.pprint :only [pprint]] 
@@ -34,7 +37,7 @@
   (let [^bytes buffer (byte-array (power-of-two 14))]
     (loop []
       (let [nread (.read in buffer)]
-        ;(format true "nread: ~a~%" nread)
+        ;;(format true "nread: ~a~%" nread)
         (when (pos? nread)
           (.write out buffer 0 nread)
           (recur))))))
@@ -48,13 +51,37 @@
 (defn file->bytes [input-file-name]
   (clojure.java.io/input-stream input-file-name))
 
-(defn inst->rfc3339-day
+(defn inst->rfc3339-day*old
   "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
   [inst]
   ;; funny that there's no function to do this already?
   (if (nil? inst)
     nil
     (.substring (pr-str inst) 7 26)))
+
+(defn inst->rfc3339-day
+  "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
+  [inst]
+  ;; funny that there's no function to do this already?
+  ()
+  (if (nil? inst)
+    nil
+    (let [formatter (clj-time.format/formatters :date)
+          time (clj-time.coerce/from-date inst)]
+      (str (clj-time.format/unparse formatter time)
+           "Z"))))
+
+(defn inst->rfc3339-utc
+  "Convert inst into RFC 3339 format."
+  [inst]
+  ;; funny that there's no function to do this already?
+  ()
+  (if (nil? inst)
+    nil
+    (let [formatter (clj-time.format/formatters :date-hour-minute-second)
+          time (clj-time.coerce/from-date inst)]
+      (str (clj-time.format/unparse formatter time)
+           "Z"))))
 
 (defn now 
   "We're looking at now, now. This is now."

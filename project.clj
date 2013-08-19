@@ -7,5 +7,6 @@
                  [clj-http "0.7.6"]  ;; HTTP client
                  [com.velisco/clj-ftp "0.3.0"] ;; FTP client
                  [clojure-csv/clojure-csv "2.0.0-alpha1"] ;; CSV read/write
+                 [clj-time "0.6.0"] ;; Sane date and time library.
                  ]
   :main gtfs-feed-archive.core)

@@ -63,7 +63,7 @@
   ;; how can clojure's output-stream let us express this?
   (let [file-name (str (:destination-dir state) "/"
                        (:feed-name state) "/"
-                       (inst->rfc3339-day (:last-modified state))
+                       (inst->rfc3339-utc (:last-modified state))
                        ".zip")
         data (:data state)]
     (try (mkdir-p (dirname file-name))
