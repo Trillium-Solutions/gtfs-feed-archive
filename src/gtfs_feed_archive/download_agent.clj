@@ -14,7 +14,7 @@
 ;; be the Clojure Way.
 (def ^:dynamic close-enough-cache-hit? nil)
 
-(defn make-from-feed [feed]
+(defn feed->download-agent [feed]
   (agent {
           :url (:gtfs-zip-url feed)
           :download-attempt 0

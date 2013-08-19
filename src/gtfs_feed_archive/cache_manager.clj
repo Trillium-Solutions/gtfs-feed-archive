@@ -111,7 +111,7 @@
 ;;;
 ;;; usage: (send-off cache-manager fetch-feed! feed)
 (defn fetch-feed! [manager feed]
-  (let [d (download-agent/make-from-feed feed)
+  (let [d (download-agent/feed->download-agent feed)
         feed-name (:feed-name feed)]
     ;; potential race condition here. I think its okay since the agent should always
     ;; move monotonically from running -> not running, and a false positive only
@@ -217,6 +217,7 @@
       ;; the others had even started. perhaps we should wait until we
       ;; can find at least one failed agent for each feed before
       ;; giving up.
+      (Thread/sleep 5000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
       (wait-for-fresh-feeds! feeds start-time cache-manager))))
 
 

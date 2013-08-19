@@ -1,9 +1,12 @@
 (ns gtfs-feed-archive.util
+  (:refer-clojure :exclude [format])   ;; I like cl-format better...
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
             [miner.ftp :as ftp])
   (:use clojure.test
-        clojure-csv.core))
+        clojure-csv.core
+        [clojure.pprint :only [pprint]] 
+        [clojure.pprint :rename {cl-format format}]))
 
 ;; handy utility functions.
 
@@ -31,7 +34,7 @@
   (let [^bytes buffer (byte-array (power-of-two 14))]
     (loop []
       (let [nread (.read in buffer)]
-        (format true "nread: ~a~%" nread)
+        ;(format true "nread: ~a~%" nread)
         (when (pos? nread)
           (.write out buffer 0 nread)
           (recur))))))

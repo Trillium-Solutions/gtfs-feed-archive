@@ -25,17 +25,22 @@
     (doseq [[name content] names-contents]
       (.putNextEntry z (java.util.zip.ZipEntry. name))
       (condp isa? (type content)
-        java.io.InputStream (copy-binary-stream content z) 
+        java.io.InputStream (copy-binary-stream content z)
+        java.io.BufferedInputStream (copy-binary-stream content z)
         java.lang.String (.write z (string->bytes content))
         (Class/forName "[B") (.write z content)))))
 
+
+;; example zip creation from download agent.
+(defn create-eugene-zip-file []
+  (make-zip-file "/tmp/testing-eugene.zip"
+               (download-agents->zip-file-list [ (last @cache-manager/cache-manager)] )))
 
 (defn make-example-zip-file []
   (make-zip-file "/tmp/foo.zip"
                  [["foo/foo.txt" (string->bytes "foo\n")]
                   ["foo/bar.txt" (string->bytes "bar\n")]
                   ["foo/baz.txt" (string->bytes "baz\n")]]))
-
 
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
@@ -60,6 +65,14 @@
   (download-agent/make-from-feed feed
                                  #'cache-manager/cache-has-a-fresh-enough-copy?))
 
+(defn download-agents->zip-file-list
+  "Build a list of file names and contents from successful download agents.
+   May throw an exception if agents do not have files or their files are not readable."
+  [download-agents]
+  (for [a (map deref download-agents) ]
+    [(str "feeds/"(:feed-name a) ".zip")
+     (clojure.java.io/input-stream (:file-name a))]))
+
 (defn build-public-feed-archive! []
   (io! "writes a zip file"
        (let [feeds (public-gtfs-feeds)
@@ -68,13 +81,14 @@
              output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip") ]
          (try (mkdir-p (dirname output-file-name))
               (println "gathering feed archives.")
-              (cache-manager/fetch-feeds! feeds)
-              (println "creating zip file.")
-              (make-zip-file output-file-name [[(str archive-name "/hello.txt")  "hello, world!\n"]])
+              (when-let [finished-agents (cache-manager/fetch-feeds! feeds)]
+                (println "creating zip file.")
+                (make-zip-file output-file-name 
+                             (download-agents->zip-file-list finished-agents)))
+              ;;(comment (make-zip-file output-file-name [[(str archive-name "/hello.txt")  "hello, world!\n"]])) 
               (catch Exception e
                 (doall (map println ["Error while building a feed archive:"
                                      e 
                                      "TODO: figure out the cause, then pass this"
                                      "error up to the User and ask them what to do."])))))))
-
 
