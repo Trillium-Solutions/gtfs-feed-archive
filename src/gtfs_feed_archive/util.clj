@@ -82,21 +82,32 @@
 (defn dirname "directory component of path" [path]
   (.getParent (clojure.java.io/file path)))
 
+(defn basename "file component of path" [path]
+  (.getName (clojure.java.io/file path)))
+
 (defn mkdir-p "make directory & create parent directories as needed" [path]
   (.mkdirs (clojure.java.io/file path)))
 
 ;; how can we pull out a :last-modified & :data from ftp connection??
 ;; fake the results to make them look like the HTTP api.
+;; use the get-as-stream function in clj-ftp
 (defn http-or-ftp-get [url]
-  (if (re-matches #"[Ff][Tt][Pp]://" url)
-    nil ;; TODO: grab via FTP
-    (try
-      ;; http/get with the { :as :byte-array } option avoids text
-      ;; conversion, which would corrupt our zip file.
-      (http/get url
-                {:as :byte-array
-                 :force-redirects true})
-      (catch Exception _ nil))))
+  (let [url-parts (try (http/parse-url url)
+                       (except Exception e nil))
+        scheme (:scheme url-parts)]
+    (cond
+     (= :ftp scheme)
+     ;; TODO: grab via FTP
+     (try
+       nil)
+     (= :http scheme)
+     (try
+       ;; http/get with the { :as :byte-array } option avoids text
+       ;; conversion, which would corrupt our zip file.
+       (http/get url
+                 {:as :byte-array
+                  :force-redirects true})
+       (catch Exception _ nil)))))
 
 
 (defn last-modified [response]

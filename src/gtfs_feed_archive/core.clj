@@ -11,7 +11,6 @@
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
-        [clj-http.client :rename {get http-get}]
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
