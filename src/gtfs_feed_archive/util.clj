@@ -51,14 +51,6 @@
 (defn file->bytes [input-file-name]
   (clojure.java.io/input-stream input-file-name))
 
-(defn inst->rfc3339-day*old
-  "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
-  [inst]
-  ;; funny that there's no function to do this already?
-  (if (nil? inst)
-    nil
-    (.substring (pr-str inst) 7 26)))
-
 (defn inst->rfc3339-day
   "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
   [inst]
@@ -152,8 +144,6 @@
   (filter (every-pred #(not (nil? (:last-update %)))
                       #(.after (:last-update %) date))
           feed-updates))
-
-
 
 (defn csv->maps
   "Turn a CSV string (with headers) into a list of maps from header->data."

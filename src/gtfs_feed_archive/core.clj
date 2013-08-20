@@ -61,10 +61,10 @@
   ;; TODO: use the CSV file writer to ensure proper quoting so strange
   ;; names and URLs don't have a chance to break the CSV file.
   (let [header-str "zip_file_name,most_recent_update,feed_name,historical_download_url\r\n"]
-    (reduce str
+    (reduce str header-str
             (for [a (map deref download-agents) ]
               (str (str "feeds/"(:feed-name a) ".zip,")
-                   (:last-modified a) ","
+                   (inst->rfc3339-utc (:last-modified a)) ","
                    (:feed-name a) ","
                    (:url a) "\r\n")))))
 
