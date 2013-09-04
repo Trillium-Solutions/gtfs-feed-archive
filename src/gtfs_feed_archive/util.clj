@@ -93,7 +93,7 @@
 ;; use the get-as-stream function in clj-ftp
 (defn http-or-ftp-get [url]
   (let [url-parts (try (http/parse-url url)
-                       (except Exception e nil))
+                       (catch Exception e nil))
         scheme (:scheme url-parts)]
     (cond
      (= :ftp scheme)
