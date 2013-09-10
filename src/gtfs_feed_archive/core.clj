@@ -6,8 +6,7 @@
             [gtfs-feed-archive.javadoc-helper :as javadoc-helper]
             [gtfs-feed-archive.cache-persistance :as cache-persistance]
             [gtfs-feed-archive.cache-manager :as cache-manager]
-            [gtfs-feed-archive.download-agent :as download-agent]
-            )
+            [gtfs-feed-archive.download-agent :as download-agent])
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
@@ -24,23 +23,19 @@
            (clojure.java.io/output-stream output-file-name))]
     (doseq [[name content] names-contents]
       (.putNextEntry z (java.util.zip.ZipEntry. name))
-      (condp isa? (type content)
-        java.io.InputStream (copy-binary-stream content z)
-        java.io.BufferedInputStream (copy-binary-stream content z)
-        java.lang.String (.write z (string->bytes content))
-        (Class/forName "[B") (.write z content)))))
-
+      (copy-data-to-stream content z))))
 
 (defn make-example-zip-file []
   (make-zip-file "/tmp/foo.zip"
-                 [["foo/foo.txt" (string->bytes "foo\n")]
+                 [["foo/foo.txt" "foo\n"] ; test automatic string->bytes conversion.
                   ["foo/bar.txt" (string->bytes "bar\n")]
                   ["foo/baz.txt" (string->bytes "baz\n")]]))
 
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
 (defn public-gtfs-feeds [] 
-  (let [public-feeds "./resources/oregon_public_gtfs_feeds.14-Aug-2013.csv"
+  (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"
+        public-feeds-august "./resources/oregon_public_gtfs_feeds.14-Aug-2013.csv"
         public-feeds-working "./resources/oregon_public_gtfs_feeds.working.csv" ;; all working feeds.
         public-feeds-smaller "./resources/oregon_public_gtfs_feeds.smaller.csv" ;; smaller feeds only.
         ]
@@ -80,13 +75,13 @@
 
 (defn prepend-path-to-file-list [path zip-file-list]
   (for [[name data] zip-file-list] 
-       [(str path "/" name) data]))
+    [(str path "/" name) data]))
 
 (defn build-public-feed-archive! []
   (io! "writes a zip file"
        (let [feeds (public-gtfs-feeds)
              names (feed-names feeds)
-             archive-name "Oregon-GTFS-feeds-2013-08-19"
+             archive-name "Oregon-GTFS-feeds-2013-09-10"
              output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip")]
          (try (mkdir-p (dirname output-file-name))
               (println "gathering feed archives.")

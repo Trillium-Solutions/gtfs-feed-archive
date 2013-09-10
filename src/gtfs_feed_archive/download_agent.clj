@@ -12,7 +12,10 @@
 ;; enough" copy of the feed, from a cache.  Our caller binds this
 ;; dynamic variable for us. Yes it's a little ugly but it appears to
 ;; be the Clojure Way.
-(def ^:dynamic close-enough-cache-hit? nil)
+(def ^:dynamic close-enough-cache-hit?
+  (fn [_ _]
+    (println "Warning, close-enough-cache-hit? is not bound. Assuming there is no cache.")
+    false))
 
 (defn feed->download-agent [feed]
   (agent {
@@ -69,7 +72,7 @@
     (try (mkdir-p (dirname file-name))
          (with-open [w 
                      (clojure.java.io/output-stream file-name)]
-           (.write w data))             ; binary data
+           (copy-data-to-stream data w)) ; binary data.
          (-> state
              (dissoc :data)
              (dissoc :destination-dir)
@@ -103,15 +106,13 @@
       ;; TODO: integrate this into our decision-making.
       (let [modification-time (page-last-modified (:url state))]
         (if (nil? modification-time) 
-          ;; Increment download-attempt & return. What to do if
-          ;; server simply doesn't support asking for the
-          ;; modification-time?  Currently we would just bail here.
+          ;; Increment download-attempt & return. 
           (do (format t "I was not able to find the modification-time of ~A~%" (:url state))
               (assoc state :download-attempt ;; OK, we'll try again later.
                      (inc (:download-attempt state))))
           (if-let [fresh-copy (close-enough-cache-hit?
-                               (:feed-name state)         
-                               modification-time)] 
+                               (:feed-name state)
+                               modification-time)]
             (do (format t "Cache already contains a fresh-enough copy of ~A~%" (:feed-name state))
                 (:file-name fresh-copy) 
                 (-> state 
@@ -130,7 +131,7 @@
                        (inc (:download-attempt state)))
                 (-> state 
                     (dissoc :download-attempt)
-                    (assoc :last-modified (last-modified response))
+                    (assoc :last-modified (:last-modified response))
                     (assoc :data (:body response)))))))))
     (-> state ;; too many attempts -- give up.
         (dissoc :download-attempt)
@@ -157,4 +158,3 @@
    ;; we just started, try a download.
    (:download-attempt state) (do (send-off *agent* next-state)
                                  (attempt-download state))))
-

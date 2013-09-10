@@ -51,6 +51,17 @@
 (defn file->bytes [input-file-name]
   (clojure.java.io/input-stream input-file-name))
 
+(defn copy-data-to-stream
+  "copy src (which can be an input stream, byte array, or a string) to
+  the output-stream dst."
+  [src dst]
+  (condp isa? (type src)
+    org.apache.commons.net.io.SocketInputStream  (copy-binary-stream src dst)
+    java.io.InputStream (copy-binary-stream src dst)
+    java.io.BufferedInputStream (copy-binary-stream src dst)
+    java.lang.String (.write dst (string->bytes src))
+    (Class/forName "[B") (.write dst src)))
+
 (defn inst->rfc3339-day
   "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
   [inst]
@@ -88,6 +99,65 @@
 (defn mkdir-p "make directory & create parent directories as needed" [path]
   (.mkdirs (clojure.java.io/file path)))
 
+;; example using clj-ftp.  
+(defn- clj-ftp-list [url]
+  (let [u (http/parse-url url)
+        host (:server-name u)
+        port (:server-port u)
+        directory (dirname (:uri u))
+        file-name (basename (:uri u))
+        user-info (or (:user-info u)
+                      "anonymous")]
+    (ftp/with-ftp
+      [client (str "ftp://" 
+                   user-info "@"
+                   host "/" directory)]
+      (first (filter (fn [ftp-file]
+                       (= file-name (.getName ftp-file)))
+                     (ftp/client-FTPFiles-all client))))))
+
+(defn- clj-ftp-file-data [url]
+  (let [u (http/parse-url url)
+        host (:server-name u)
+        port (:server-port u)
+        directory (dirname (:uri u))
+        file-name (basename (:uri u))
+        user-info (or (:user-info u)
+                      "anonymous")]
+    (ftp/with-ftp
+      [client (str "ftp://" 
+                   user-info "@"
+                   host "/" directory)]
+      ;; Supposedly we should run (ftp/client-complete-pending-command
+      ;; client) after using this stream. Maybe we can make a macro
+      ;; similar to with-open which accomplishes this? Or copy the
+      ;; whole darn thing into an InputStream representing a tempory file,  
+      ;; cleanup the ftp connection, and return the copied stream.
+      ;;
+      ;; See http://alvinalexander.com/java/java-temporary-files-create-delete
+      (ftp/client-set-file-type client :binary) ;; no ASCII conversion.
+      (ftp/client-get-stream client file-name))))
+
+(defn ftp-url-last-modifed [url]
+  (try 
+    (let [ftp-file-listing (clj-ftp-list url)]
+      ;; .getTime converts from GregorianCalendar object to a Date.
+      ;; Since, of course, Java has both and they're incompatible.
+        (.getTime (.getTimestamp ftp-file-listing)))
+    (catch Exception e nil)))
+
+(defn ftp-url-data [url]
+  ;; simple wrapper which ignores errors -> nil
+  (try 
+    (let [ftp-file-listing (clj-ftp-list url)]
+        (.getTimestamp ftp-file-listing))
+    (catch Exception e nil)))
+
+(defn http-last-modified-header [response]
+  (-> response
+      (get-in [:headers "last-modified"])
+      java.util.Date.))
+
 ;; how can we pull out a :last-modified & :data from ftp connection??
 ;; fake the results to make them look like the HTTP api.
 ;; use the get-as-stream function in clj-ftp
@@ -95,45 +165,50 @@
   (let [url-parts (try (http/parse-url url)
                        (catch Exception e nil))
         scheme (:scheme url-parts)]
-    (cond
-     (= :ftp scheme)
-     ;; TODO: grab via FTP
-     (try
-       nil)
-     (= :http scheme)
-     (try
-       ;; http/get with the { :as :byte-array } option avoids text
-       ;; conversion, which would corrupt our zip file.
-       (http/get url
-                 {:as :byte-array
-                  :force-redirects true})
-       (catch Exception _ nil)))))
+    (condp = scheme
+     :ftp (try
+            ;; grab via FTP, and return a similar hash-map to http/get.
+            (let [last-modified (ftp-url-last-modifed url)
+                  data (clj-ftp-file-data url)]
+              (if (and last-modified data)
+                {:body data
+                 :last-modified last-modified}
+                nil))
+            (catch Exception _ nil))
+     :http (try
+             ;; http/get with the { :as :byte-array } option avoids text
+             ;; conversion, which would corrupt our zip file.
+             (let [response (http/get url
+                                      {:as :byte-array
+                                       :force-redirects true})]
+               {:body (:body response)
+                :last-modified (try (http-last-modified-header response)
+                                    (catch Exception _ nil))})
+             (catch Exception _ nil)))))
 
-
-(defn last-modified [response]
-  (-> response
-      (get-in [:headers "last-modified"])
-      java.util.Date.))
-
-
-;; TODO: make a version which works for FTP URLs.  May need to search
-;; for pure Java FTP library that supports the LIST command better.
-(defn page-last-modified [url]
+(defn http-page-last-modified [url]
   (or (try 
         ;; NOTE: HEAD with force-redirects doesn't return the
         ;; modification-time with all servers it seems. That's why we
         ;; fall back to a GET request.
-        (last-modified (http/head url
+        (http-last-modified-header (http/head url
                                   {:force-redirects true}))
         (catch Exception _ nil))
       (try 
-        (last-modified (http/get url
+        (http-last-modified-header (http/get url
                                  {;; Try to avoid downloading entire
                                   ;; file, since we only care about
                                   ;; the headers.
                                   :as :stream
                                   :force-redirects true}))
         (catch Exception _ nil))))
+
+;; Works for HTTP or FTP URLs.
+(defn page-last-modified [url]
+  (let [scheme (:scheme (http/parse-url url))]
+    (condp = scheme
+      :ftp (ftp-url-last-modifed url)
+      :http (http-page-last-modified url))))
 
 (defn page-data "http/get example"
   [url]
