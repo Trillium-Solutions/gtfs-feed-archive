@@ -49,7 +49,7 @@
   (filter #(nil? (:last-update %))
           feed-updates))
 
-(defn run-command-line [&args]
+(defn run-command-line [& args]
   (println "args" args)
   (println "*command-line-args*" *command-line-args*))
 
