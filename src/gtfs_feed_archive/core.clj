@@ -10,10 +10,11 @@
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
+        [clojure.tools.cli :only [cli]] ;; Command-line parsing.
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
-(javadoc-helper/set-local-documentation-source)
+(javadoc-helper/set-local-documentation-source!)
 
 ;; contents can be a java.io.InputStream, in which case we'll loop and
 ;; copy everything from the stream into the zip file.
