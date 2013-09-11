@@ -49,10 +49,12 @@
   (filter #(nil? (:last-update %))
           feed-updates))
 
-(defn run-command-line []
-  (println *command-line-args*))
+(defn run-command-line [&args]
+  (println "args" args)
+  (println "*command-line-args*" *command-line-args*))
 
-(defn -main [] (run-command-line))
+(defn -main [& args]
+  (apply run-command-line args))
 
 (defn download-agents->last-updates-csv [download-agents]
   ;; TODO: use the CSV file writer to ensure proper quoting so strange
