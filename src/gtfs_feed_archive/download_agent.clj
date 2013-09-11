@@ -36,11 +36,14 @@
   (or (:download-failed state)
       (:file-save-failed state)))
 
-(defn completed? [state]
-  "Has the download agent completed, either with success or failure??"
-  ;; An alternative would be to check if there's a (:completion-date state)
-  (or (success? state) 
+(defn completed? "Has the download agent completed, either with success or failure??"
+  [state]
+  (or (success? state)
       (failure? state)))
+
+(defn not-a-copy? "True if the agent does not represent a copy of another download agent's file."
+  [state]
+  (not (:im-just-a-copy state)))
 
 (def still-running?
   (complement completed?))

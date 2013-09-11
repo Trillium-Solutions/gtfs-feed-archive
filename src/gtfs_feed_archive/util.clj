@@ -15,6 +15,12 @@
 
 (def t true);; for cl-format.
 
+(defmacro try-catch-nil
+  "Evaluate form, or return nil if there was an exception."
+  [form]
+  `(try ~form
+        (catch Exception ignored-exception# nil)))
+
 (defn keyword-with-dashes
   "convert a string to a keyword replacing '_' with '-'"
   [string]
@@ -31,9 +37,8 @@
 
 (defn power-of-two "nth power of 2" [n] (int (Math/pow 2 n)))
 
-(defn copy-binary-stream [^java.io.InputStream in
-                          ^java.io.OutputStream out]
-  "Buffered copy of in-stream to out-stream."
+(defn copy-binary-stream "Buffered copy of in-stream to out-stream."
+  [^java.io.InputStream in ^java.io.OutputStream out]
   (let [^bytes buffer (byte-array (power-of-two 14))]
     (loop []
       (let [nread (.read in buffer)]
@@ -54,60 +59,48 @@
 (defn copy-data-to-stream
   "copy src (which can be an input stream, byte array, or a string) to
   the output-stream dst."
-  [src dst]
-  (condp isa? (type src)
-    org.apache.commons.net.io.SocketInputStream  (copy-binary-stream src dst)
+  [src ^java.io.OutputStream dst]
+  (condp #(isa? %2 %1) (type src)
     java.io.InputStream (copy-binary-stream src dst)
-    java.io.BufferedInputStream (copy-binary-stream src dst)
     java.lang.String (.write dst (string->bytes src))
     (Class/forName "[B") (.write dst src)))
 
-(defn inst->rfc3339-day
-  "Convert inst into RFC 3339 format, then pull out the year, month, and day only."
-  [inst]
-  ;; funny that there's no function to do this already?
-  ()
+(defn inst->rfc3339-day "RFC 3339 format, with year, month, and day only."
+  [^java.util.Date inst]
   (if (nil? inst)
     nil
     (let [formatter (clj-time.format/formatters :date)
           time (clj-time.coerce/from-date inst)]
-      (str (clj-time.format/unparse formatter time)
-           "Z"))))
+      (str (clj-time.format/unparse formatter time) "Z"))))
 
-(defn inst->rfc3339-utc
-  "Convert inst into RFC 3339 format."
+(defn inst->rfc3339-utc "Convert inst into RFC 3339 format."
   [inst]
-  ;; funny that there's no function to do this already?
-  ()
   (if (nil? inst)
     nil
     (let [formatter (clj-time.format/formatters :date-hour-minute-second)
           time (clj-time.coerce/from-date inst)]
-      (str (clj-time.format/unparse formatter time)
-           "Z"))))
+      (str (clj-time.format/unparse formatter time) "Z"))))
 
-(defn now 
-  "We're looking at now, now. This is now."
+(defn now "We're looking at now, now. This is now."
   [] (java.util.Date.))
 
-(defn dirname "directory component of path" [path]
-  (.getParent (clojure.java.io/file path)))
+(defn dirname "directory component of path"
+  [path] (.getParent (clojure.java.io/file path)))
 
-(defn basename "file component of path" [path]
-  (.getName (clojure.java.io/file path)))
+(defn basename "file component of path"
+  [path] (.getName (clojure.java.io/file path)))
 
-(defn mkdir-p "make directory & create parent directories as needed" [path]
-  (.mkdirs (clojure.java.io/file path)))
+(defn mkdir-p "make directory & create parent directories as needed"
+  [path] (.mkdirs (clojure.java.io/file path)))
 
-;; example using clj-ftp.  
-(defn- clj-ftp-list [url]
+(defn- clj-ftp-list "find the FTP list object for url."
+  [url]
   (let [u (http/parse-url url)
         host (:server-name u)
         port (:server-port u)
         directory (dirname (:uri u))
         file-name (basename (:uri u))
-        user-info (or (:user-info u)
-                      "anonymous")]
+        user-info (or (:user-info u) "anonymous")]
     (ftp/with-ftp
       [client (str "ftp://" 
                    user-info "@"
@@ -116,14 +109,15 @@
                        (= file-name (.getName ftp-file)))
                      (ftp/client-FTPFiles-all client))))))
 
-(defn- clj-ftp-file-data [url]
+(defn- clj-ftp-file-data
+  "Download an FTP url, and return its data as an InputStream."
+  [url]
   (let [u (http/parse-url url)
         host (:server-name u)
         port (:server-port u)
         directory (dirname (:uri u))
         file-name (basename (:uri u))
-        user-info (or (:user-info u)
-                      "anonymous")]
+        user-info (or (:user-info u) "anonymous")]
     (ftp/with-ftp
       [client (str "ftp://" 
                    user-info "@"
@@ -139,31 +133,27 @@
       (ftp/client-get-stream client file-name))))
 
 (defn ftp-url-last-modifed [url]
-  (try 
+  (try-catch-nil
     (let [ftp-file-listing (clj-ftp-list url)]
       ;; .getTime converts from GregorianCalendar object to a Date.
       ;; Since, of course, Java has both and they're incompatible.
-        (.getTime (.getTimestamp ftp-file-listing)))
-    (catch Exception e nil)))
+        (.getTime (.getTimestamp ftp-file-listing)))))
 
-(defn ftp-url-data [url]
-  ;; simple wrapper which ignores errors -> nil
-  (try 
+(defn ftp-url-data "Download an InputStream for the data at url, or nil if there is an error."
+  [url]
+  (try-catch-nil
     (let [ftp-file-listing (clj-ftp-list url)]
-        (.getTimestamp ftp-file-listing))
-    (catch Exception e nil)))
+        (.getTimestamp ftp-file-listing))))
 
-(defn http-last-modified-header [response]
-  (-> response
-      (get-in [:headers "last-modified"])
-      java.util.Date.))
+(defn http-last-modified-header
+  "Return the last-modified HTTP header as a java.util.Date, or throw an exception."
+  [response]
+  (java.util.Date. (get-in response [:headers "last-modified"])))
 
-;; how can we pull out a :last-modified & :data from ftp connection??
-;; fake the results to make them look like the HTTP api.
-;; use the get-as-stream function in clj-ftp
-(defn http-or-ftp-get [url]
-  (let [url-parts (try (http/parse-url url)
-                       (catch Exception e nil))
+(defn http-or-ftp-get
+  "Find the data and last-modified time of an FTP or HTTP url."
+  [url] 
+  (let [url-parts (try-catch-nil (http/parse-url url))
         scheme (:scheme url-parts)]
     (condp = scheme
      :ftp (try
@@ -182,26 +172,23 @@
                                       {:as :byte-array
                                        :force-redirects true})]
                {:body (:body response)
-                :last-modified (try (http-last-modified-header response)
-                                    (catch Exception _ nil))})
+                :last-modified (try-catch-nil (http-last-modified-header response))})
              (catch Exception _ nil)))))
 
 (defn http-page-last-modified [url]
-  (or (try 
+  (or (try-catch-nil 
         ;; NOTE: HEAD with force-redirects doesn't return the
         ;; modification-time with all servers it seems. That's why we
         ;; fall back to a GET request.
         (http-last-modified-header (http/head url
-                                  {:force-redirects true}))
-        (catch Exception _ nil))
-      (try 
+                                  {:force-redirects true})))
+      (try-catch-nil
         (http-last-modified-header (http/get url
                                  {;; Try to avoid downloading entire
                                   ;; file, since we only care about
                                   ;; the headers.
                                   :as :stream
-                                  :force-redirects true}))
-        (catch Exception _ nil))))
+                                  :force-redirects true})))))
 
 ;; Works for HTTP or FTP URLs.
 (defn page-last-modified [url]
@@ -212,10 +199,9 @@
 
 (defn page-data "http/get example"
   [url]
-  (try 
+  (try-catch-nil
     (-> (http/get url {:as :byte-array})
-        (get :body))
-    (catch Exception _ nil)))
+        (get :body))))
 
 (defn page-size "size of data at URL" [url]
   (count (page-data url)))

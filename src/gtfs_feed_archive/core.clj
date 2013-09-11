@@ -49,7 +49,10 @@
   (filter #(nil? (:last-update %))
           feed-updates))
 
-(defn -main [] 'run-command-line-application)
+(defn run-command-line []
+  (println *command-line-args*))
+
+(defn -main [] (run-command-line))
 
 (defn download-agents->last-updates-csv [download-agents]
   ;; TODO: use the CSV file writer to ensure proper quoting so strange
@@ -77,16 +80,18 @@
   (for [[name data] zip-file-list] 
     [(str path "/" name) data]))
 
-(defn build-public-feed-archive! []
-  (io! "writes a zip file"
+(defn build-public-feed-archive!
+  "Write a zip file with the most recent data for Oregon public GTFS feeds."
+  []
+  (io! "Creates a zip file."
        (let [feeds (public-gtfs-feeds)
              names (feed-names feeds)
-             archive-name "Oregon-GTFS-feeds-2013-09-10"
+             archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
              output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip")]
          (try (mkdir-p (dirname output-file-name))
-              (println "gathering feed archives.")
+              (println "Gathering feed archives.")
               (when-let [finished-agents (cache-manager/fetch-feeds! feeds)]
-                (println "creating zip file.")
+                (println "Creating zip file.")
                 (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
                                       (download-agents->zip-file-list finished-agents))
                       file-list-with-prefix (prepend-path-to-file-list archive-name
@@ -94,8 +99,7 @@
                   (make-zip-file output-file-name
                                  file-list-with-prefix)))
               (catch Exception e
-                (doall (map println ["Error while building a feed archive:"
-                                     e
+                (doall (map println ["Error while building a feed archive:" (str e)
                                      "TODO: figure out the cause, then pass this"
                                      "error up to the User and ask them what to do."])))))))
 

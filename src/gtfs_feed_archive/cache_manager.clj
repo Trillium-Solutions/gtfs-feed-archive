@@ -70,6 +70,12 @@
   (or (cache-persistance/load-cache! +cache-file+)
       (agent [])))
 
+(defn reload-cache-manager! "for debugging only."
+  []
+  (def cache-manager
+    (or (cache-persistance/load-cache! +cache-file+)
+        (agent []))))
+
 (defn save-cache-manager! []
   (.renameTo (clojure.java.io/file +cache-file+) 
              (clojure.java.io/file +cache-file-backup+))
@@ -96,9 +102,6 @@
                                (comp fresh-enough? :last-modified)
                                (partial download-agent/has-feed-name? feed-name))
                    (map deref download-agents)))))
-
-
-
 
 (defn feed-already-has-running-download-agent? [feed-name manager]
   (some (every-pred download-agent/still-running?
@@ -136,9 +139,8 @@
           (println "has data of size: " (count (:data a)))
           (println k (k a)))))))
 
-
 (defn clean-cache-example! "example cache cleaning code"
-  [] 
+  []
   (send-off cache-manager
             (fn [manager]
               (remove (comp (partial download-agent/has-feed-name? "trimet-portland-or-us")
