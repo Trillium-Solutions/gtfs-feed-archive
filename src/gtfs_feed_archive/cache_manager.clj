@@ -62,24 +62,32 @@
 ;;      happen if we accidentally started more than one copy of the
 ;;      application.
 
-(def +cache-file+ "/tmp/gtfs-cache/cache.edn")
-(def +cache-file-backup+ (str +cache-file+ ".1"))
+(def ^:dynamic *cache-directory* "/tmp/gtfs-feed-archive-cache")
 
-(defonce cache-manager
-  ;; TODO: verify that all files referenced in the cache exist.
-  (or (cache-persistance/load-cache! +cache-file+)
-      (agent [])))
+(defn set-cache-directory! [dir]
+  (def ^:dynamic *cache-directory* dir))
 
-(defn reload-cache-manager! "for debugging only."
+(defn cache-directory [] *cache-directory*)
+
+(defn cache-file [] (str *cache-directory* "/cache.edn"))
+(defn cache-file-backup [] (str (cache-file) ".1"))
+
+;;(def +cache-file+ "/tmp/gtfs-cache/cache.edn")
+;;(def +cache-file-backup+ (str +cache-file+ ".1"))
+
+(def cache-manager (agent []))
+
+(defn load-cache-manager! "Load a new cache mananger from disk, if possible."
   []
+  ;; TODO: verify that all files referenced in the cache exist.
   (def cache-manager
-    (or (cache-persistance/load-cache! +cache-file+)
+    (or (cache-persistance/load-cache! (cache-file))
         (agent []))))
 
 (defn save-cache-manager! []
-  (.renameTo (clojure.java.io/file +cache-file+) 
-             (clojure.java.io/file +cache-file-backup+))
-  (cache-persistance/save-cache! cache-manager +cache-file+))
+  (.renameTo (clojure.java.io/file (cache-file)) 
+             (clojure.java.io/file (cache-file-backup)))
+  (cache-persistance/save-cache! cache-manager (cache-file)))
 
 ;;; for debugging
 (defn !reset-cache-manager! []
@@ -114,7 +122,7 @@
 ;;;
 ;;; usage: (send-off cache-manager fetch-feed! feed)
 (defn fetch-feed! [manager feed]
-  (let [d (download-agent/feed->download-agent feed)
+  (let [d (download-agent/feed->download-agent feed (cache-directory))
         feed-name (:feed-name feed)]
     ;; potential race condition here. I think its okay since the agent should always
     ;; move monotonically from running -> not running, and a false positive only
@@ -193,10 +201,11 @@
                         (println "all feeds OK:" all-feeds-ok)
                         (println "any agents still running?")
                         (pprint any-agents-still-running) 
-                        (println "successful agents:")
-                        (pprint successful-feed-names) 
-                        (println "not yet successful agents:")
-                        (pprint unsuccessful-feed-names) 
+                        (when false ;; for debugging.
+                          (println "successful agents:")
+                          (pprint successful-feed-names) 
+                          (println "not yet successful agents:")
+                          (pprint unsuccessful-feed-names))
                         (recur)))))))
 
 ;; returns a list of download agents with completed downloads of all feeds,

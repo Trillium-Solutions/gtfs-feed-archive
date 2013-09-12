@@ -17,13 +17,14 @@
     (println "Warning, close-enough-cache-hit? is not bound. Assuming there is no cache.")
     false))
 
-(defn feed->download-agent [feed]
+(defn feed->download-agent [feed destination-dir]
   (agent {
           :url (:gtfs-zip-url feed)
           :download-attempt 0
           :feed-name (:feed-name feed)
           :feed-description (:feed-description feed) ; for debugging.
-          :destination-dir "/tmp/gtfs-cache/"}))
+          ;:destination-dir "/tmp/gtfs-cache/"
+          :destination-dir destination-dir}))
 
 (defn success? [state]
   "Has the file been saved?"

@@ -100,8 +100,13 @@
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (let [output-directory (:output-directory options)
           feeds (mapcat read-csv-file (:input-csv options))]
-      (format t "fetching feeds: ~a~%" feeds)
+      (when-let [dir (:cache-directory options)]
+        (format t "Setting cache directory: ~a~%" dir)
+        (cache-manager/set-cache-directory! dir))
+      (cache-manager/load-cache-manager!)
+      (format t "Fetching ~a feeds.~%" (count feeds))
       (cache-manager/fetch-feeds! feeds)
+      (cache-manager/save-cache-manager!) ;; save cache status for next time.
       )))
 
 (defn -main [& args]

@@ -18,6 +18,9 @@
                     ["-o" "--output-directory" "Directory to place output zip files into."]
                     ["-i" "--input-csv"
                      "Input CSV feed list file." :assoc-fn set-merge]
+                    ["-c" "--cache-directory" 
+                     "Cache directory for GTFS feed downloads."
+                     :default "/tmp/gtfs-cache/"]
                     ["-s" "--since-date"
                      "Create an archive of feeds modified after date, e.g. 2013-08-23."
                      :parse-fn parse-date
