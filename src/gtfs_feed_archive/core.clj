@@ -98,7 +98,7 @@
 (defn run-command-line [& args]
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (let [output-directory (:output-directory options)
-          feeds (apply lazy-cat (map read-csv-file (:input-csv options)))]
+          feeds (mapcat read-csv-file (:input-csv options))]
       (format t "fetching feeds: ~a~%" feeds)
       (cache-manager/fetch-feeds! feeds)
       )))
