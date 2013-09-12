@@ -117,7 +117,7 @@
           (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
                                           finished-agents)]
             (build-feed-archive!
-             (str "Oregon-GTFS-feeds-updated-from-" (inst->rfc3339-day s)
+             (str "Oregon-GTFS-updated-from-" (inst->rfc3339-day s)
                   "-to-" (inst->rfc3339-day (now))) 
                                  output-directory
                                  new-enough-agents)))))))
