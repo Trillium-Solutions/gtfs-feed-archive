@@ -120,3 +120,17 @@ mendocino,Mendocino County CA,http://localhost/gtfs-examples/mendocino-transit-a
     [finished-agents
      running-agents
      running-and-finished]))
+
+;;; for instance:
+;;; (error-feeds (feed-last-updates (example-csv-config))) 
+;;;  => ({:last-update nil, :feed-name "error"})
+(defn error-feeds [feed-updates]
+  (filter #(nil? (:last-update %))
+          feed-updates))
+
+(defn make-example-zip-file []
+  (make-zip-file "/tmp/foo.zip"
+                 [["foo/foo.txt" "foo\n"] ; test automatic string->bytes conversion.
+                  ["foo/bar.txt" (string->bytes "bar\n")]
+                  ["foo/baz.txt" (string->bytes "baz\n")]]))
+
