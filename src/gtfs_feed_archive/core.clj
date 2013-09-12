@@ -37,12 +37,6 @@
   (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"]
     (read-csv-file public-feeds)))
 
-(defn run-command-line [& args]
-  (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
-    ))
-
-(defn -main [& args]
-  (apply run-command-line args))
 
 (defn download-agents->last-updates-csv [download-agents]
   ;; TODO: use the CSV file writer to ensure proper quoting so strange
@@ -70,26 +64,45 @@
   (for [[name data] zip-file-list] 
     [(str path "/" name) data]))
 
+(defn build-feed-archive! 
+  "Given an archive name, and a successful download agents, create an
+  archive in the output directory."
+  [archive-name output-directory finished-agents]
+  (let [output-file-name (str output-directory "/" archive-name ".zip")]
+    (try (mkdir-p (dirname output-file-name))
+         (println "Creating zip file.")
+         (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
+                               (download-agents->zip-file-list finished-agents))
+               file-list-with-prefix (prepend-path-to-file-list archive-name
+                                                                file-list)]
+           (make-zip-file output-file-name
+                          file-list-with-prefix))
+         (catch Exception e
+           ;; TODO: log and/or show error to user.
+           (doall (map println ["Error while building a feed archive:" (str e)]))))))
+
 (defn build-public-feed-archive!
   "Write a zip file with the most recent data for Oregon public GTFS feeds."
   []
-  (io! "Creates a zip file."
+  (io! "Creates a file."
        (let [feeds (public-gtfs-feeds)
              names (feed-names feeds)
              archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
-             output-file-name (str "/tmp/gtfs-archive-output/" archive-name ".zip")]
-         (try (mkdir-p (dirname output-file-name))
-              (println "Gathering feed archives.")
-              (when-let [finished-agents (cache-manager/fetch-feeds! feeds)]
-                (println "Creating zip file.")
-                (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
-                                      (download-agents->zip-file-list finished-agents))
-                      file-list-with-prefix (prepend-path-to-file-list archive-name
-                                                                       file-list)]
-                  (make-zip-file output-file-name
-                                 file-list-with-prefix)))
-              (catch Exception e
-                (doall (map println ["Error while building a feed archive:" (str e)
-                                     "TODO: figure out the cause, then pass this"
-                                     "error up to the User and ask them what to do."])))))))
+             output-directory "/tmp/gtfs-archive-output"]
+         (let [finished-agents (cache-manager/fetch-feeds! feeds)]
+           ;; TODO: if there's an error, provide a log and notify the user somehow.
+           (if finished-agents
+             (build-feed-archive! archive-name output-directory finished-agents)
+             (println "Error fetching public GTFS feeds."))))))
+
+(defn run-command-line [& args]
+  (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
+    (let [output-directory (:output-directory options)
+          feeds (apply lazy-cat (map read-csv-file (:input-csv options)))]
+      (format t "fetching feeds: ~a~%" feeds)
+      (cache-manager/fetch-feeds! feeds)
+      )))
+
+(defn -main [& args]
+  (apply run-command-line args))
 
