@@ -49,6 +49,13 @@
 (def still-running?
   (complement completed?))
 
+(defn modified-after? [earliest-date state]
+  "Was the downloaded file modified on or after earliest-date?"
+  [earliest-date state]
+  (and (success? state)
+       (when-let [d (:last-modified state)]
+         (not (.before d earliest-date)))))
+
 (defn completed-after?
   "Has a download agent completed on or after earliest-date?
    Could have completed with either a success or failure state."

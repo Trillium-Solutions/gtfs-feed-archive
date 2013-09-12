@@ -13,7 +13,8 @@
                            (if-let [oldval (get previous key)]
                              (merge oldval val)
                              (hash-set val))))
-        parse-date (fn [arg] (when-let [d (clj-time.format/parse-local arg)] (.toDate d)))
+        parse-date (fn [arg] (when-let [d (clj-time.format/parse-local (clj-time.format/formatters :date)
+                                                                       arg)] (.toDate d)))
         cli-format ["Create a GTFS feed archive."
                     ["-o" "--output-directory" "Directory to place output zip files into."]
                     ["-i" "--input-csv"

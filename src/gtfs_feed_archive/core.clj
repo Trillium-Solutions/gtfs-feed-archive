@@ -71,13 +71,12 @@
   [archive-name output-directory finished-agents]
   (let [output-file-name (str output-directory "/" archive-name ".zip")]
     (try (mkdir-p (dirname output-file-name))
-         (println "Creating zip file.")
+         (format t "Creating zip file: ~a~%" output-file-name)
          (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
                                (download-agents->zip-file-list finished-agents))
                file-list-with-prefix (prepend-path-to-file-list archive-name
                                                                 file-list)]
-           (make-zip-file output-file-name
-                          file-list-with-prefix))
+           (make-zip-file output-file-name file-list-with-prefix))
          (catch Exception e
            ;; TODO: log and/or show error to user.
            (doall (map println ["Error while building a feed archive:" (str e)]))))))
@@ -87,7 +86,7 @@
   []
   (io! "Creates a file."
        (let [feeds (public-gtfs-feeds)
-             names (feed-names feeds)
+             ;;names (feed-names feeds)
              archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
              output-directory "/tmp/gtfs-archive-output"]
          (let [finished-agents (cache-manager/fetch-feeds! feeds)]
@@ -105,9 +104,23 @@
         (cache-manager/set-cache-directory! dir))
       (cache-manager/load-cache-manager!)
       (format t "Fetching ~a feeds.~%" (count feeds))
-      (cache-manager/fetch-feeds! feeds)
-      (cache-manager/save-cache-manager!) ;; save cache status for next time.
-      )))
+      (let [finished-agents (cache-manager/fetch-feeds! feeds)]
+        (when-not finished-agents
+          (println "Error updating feeds, sorry!")
+          (System/exit 1))
+        (cache-manager/save-cache-manager!) ;; save cache status for next time.
+        (when (:all options)
+          (build-feed-archive! (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now))) 
+                               output-directory
+                               finished-agents))
+        (doseq [s (:since-date options)]
+          (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
+                                          finished-agents)]
+            (build-feed-archive!
+             (str "Oregon-GTFS-feeds-updated-from-" (inst->rfc3339-day s)
+                  "-to-" (inst->rfc3339-day (now))) 
+                                 output-directory
+                                 new-enough-agents)))))))
 
 (defn -main [& args]
   (apply run-command-line args))
