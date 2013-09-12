@@ -50,9 +50,45 @@
   (filter #(nil? (:last-update %))
           feed-updates))
 
+(defn parse-args-or-die! [& args]
+  (let [set-merge (fn [previous key val]
+                    (assoc previous key
+                           (if-let [oldval (get previous key)]
+                             (merge oldval val)
+                             (hash-set val))))
+        parse-date #(when-let [d (clj-time.format/parse-local %)] (.toDate d))
+        cli-format ["Create a GTFS feed archive."
+                    ["-i" "--input-csv"
+                     "Input CSV feed list file." :assoc-fn set-merge]
+                    ["-s" "--since"
+                     (str "Create archive of feeds modified since <DATE>"
+                          "in RFC 3339 format: e.g. 2013-08-23.")
+                     :parse-fn parse-date
+                     :assoc-fn set-merge]
+                    ["-a" "--all"
+                     "Create archive of all feeds." :default false :flag true]]
+        [_ _ usage-text] (apply cli nil cli-format)
+        print-usage-and-die! (fn [malfunction]
+                               (println usage-text)
+                               (println malfunction)
+                               (System/exit 1)) 
+        [flags remaining-args _]
+        (try (apply cli args cli-format)
+             (catch Exception e (do (println "Error parsing command line: " e)
+                                    (print-usage-and-die!))))]
+    (println "flags => " flags)
+    (println "remaining-args => " remaining-args)
+    ;; Now, see if we have all the information we need to create an archive.
+    ;; If not, print usage information and bail.
+    (when-not (every? identity (:since flags))
+      (print-usage-and-die! "Please make sure all dates are formatted as RFC 3339."))
+    (when-not (pos? (count (:input-csv flags)))
+      (print-usage-and-die! "Please supply at least one input CSV feed list file."))
+    [flags remaining-args]))
+
 (defn run-command-line [& args]
-  (println "args" args)
-  (println "*command-line-args*" *command-line-args*))
+  (println
+   (apply parse-args-or-die! args)))
 
 (defn -main [& args]
   (apply run-command-line args))
