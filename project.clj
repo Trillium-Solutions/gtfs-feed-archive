@@ -1,6 +1,6 @@
-(defproject gtfs-feed-archive "0.0.1"
+(defproject gtfs-feed-archive "0.1.0"
   :description "GTFS Feed Archive Tool"
-  :url "http://github.com/ed-g"
+  :url "http://github.com/ed-g/gtfs-feed-archive"
   :license {:name "GNU GPL version 3 or newer"
             :url "http://www.gnu.org"}
   :dependencies [[org.clojure/clojure "1.5.1"]
@@ -10,4 +10,5 @@
                  [clj-time "0.6.0"] ;; Sane date and time library.
                  [org.clojure/tools.cli "0.2.4"] ;; Command-line parsing.
                  ]
-  :main gtfs-feed-archive.core)
+  :main gtfs-feed-archive.core
+  :aot [gtfs-feed-archive.core])

@@ -1,4 +1,5 @@
 (ns gtfs-feed-archive.core
+  (:gen-class)
   (:refer-clojure :exclude [format])   ;; I like cl-format better...
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
