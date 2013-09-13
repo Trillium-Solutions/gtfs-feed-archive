@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [format]) ;; I like cl-format better.
   (:require [clojure.edn :as edn]
             [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
-            )
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:use gtfs-feed-archive.util
         clojure.test
         [clojure.pprint :only [pprint]] 
@@ -118,13 +118,13 @@
       (let [modification-time (page-last-modified (:url state))]
         (if (nil? modification-time) 
           ;; Increment download-attempt & return. 
-          (do (format t "I was not able to find the modification-time of ~A~%" (:url state))
+          (do (warn "I was not able to find the modification-time of" (:url state))
               (assoc state :download-attempt ;; OK, we'll try again later.
                      (inc (:download-attempt state))))
           (if-let [fresh-copy (close-enough-cache-hit?
                                (:feed-name state)
                                modification-time)]
-            (do (format t "Cache already contains a fresh-enough copy of ~A~%" (:feed-name state))
+            (do (info "Cache already contains a fresh-enough copy of" (:feed-name state))
                 (:file-name fresh-copy) 
                 (-> state 
                     (dissoc :download-attempt)
@@ -136,7 +136,7 @@
                     (assoc :completion-date (now))
                     (assoc :file-saved true)))
             (let [response (http-or-ftp-get (:url state))]
-              (format t "Cache does not contain a fresh-enough copy of ~A, downloading.~%" (:feed-name state))
+              (info "Cache does not contain a fresh-enough copy of " (:feed-name state) ", downloading." )
               (if (nil? response)
                 (assoc state :download-attempt ;; ok, we'll try again later.
                        (inc (:download-attempt state)))

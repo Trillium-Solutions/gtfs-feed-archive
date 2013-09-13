@@ -1,6 +1,7 @@
 (ns gtfs-feed-archive.util
   (:refer-clojure :exclude [format])   ;; I like cl-format better...
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)]
             clojure.set
             [miner.ftp :as ftp]
             clj-time.coerce

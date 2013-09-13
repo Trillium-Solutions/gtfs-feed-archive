@@ -4,6 +4,7 @@
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
             [miner.ftp :as ftp]
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)]
             [gtfs-feed-archive.javadoc-helper :as javadoc-helper]
             [gtfs-feed-archive.cache-persistance :as cache-persistance]
             [gtfs-feed-archive.cache-manager :as cache-manager]
@@ -71,7 +72,7 @@
   [archive-name output-directory finished-agents]
   (let [output-file-name (str output-directory "/" archive-name ".zip")]
     (try (mkdir-p (dirname output-file-name))
-         (format t "Creating zip file: ~a~%" output-file-name)
+         (info "Creating zip file:" output-file-name)
          (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
                                (download-agents->zip-file-list finished-agents))
                file-list-with-prefix (prepend-path-to-file-list archive-name
@@ -79,7 +80,7 @@
            (make-zip-file output-file-name file-list-with-prefix))
          (catch Exception e
            ;; TODO: log and/or show error to user.
-           (doall (map println ["Error while building a feed archive:" (str e)]))))))
+           (error "Error while building a feed archive:" (str e))))))
 
 (defn build-public-feed-archive!
   "Write a zip file with the most recent data for Oregon public GTFS feeds."
@@ -93,20 +94,20 @@
            ;; TODO: if there's an error, provide a log and notify the user somehow.
            (if finished-agents
              (build-feed-archive! archive-name output-directory finished-agents)
-             (println "Error fetching public GTFS feeds."))))))
+             (error "Error fetching public GTFS feeds."))))))
 
 (defn run-command-line [& args]
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (let [output-directory (:output-directory options)
           feeds (mapcat read-csv-file (:input-csv options))]
       (when-let [dir (:cache-directory options)]
-        (format t "Setting cache directory: ~a~%" dir)
+        (info "Setting cache directory:" dir)
         (cache-manager/set-cache-directory! dir))
       (cache-manager/load-cache-manager!)
-      (format t "Fetching ~a feeds.~%" (count feeds))
+      (info "Fetching" (count feeds ) "feeds.")
       (let [finished-agents (cache-manager/fetch-feeds! feeds)]
         (when-not finished-agents
-          (println "Error updating feeds, sorry!")
+          (error "Error updating feeds, sorry!")
           (System/exit 1))
         (cache-manager/save-cache-manager!) ;; save cache status for next time.
         (when (:all options)
@@ -123,5 +124,6 @@
                                  new-enough-agents)))))))
 
 (defn -main [& args]
+  (timbre/set-level! :warn)
   (apply run-command-line args))
 

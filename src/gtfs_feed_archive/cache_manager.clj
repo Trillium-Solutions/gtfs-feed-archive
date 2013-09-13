@@ -2,13 +2,14 @@
   (:refer-clojure :exclude [format]) ;; I like cl-format better.
   (:require [clojure.edn :as edn])
   (:require [gtfs-feed-archive.download-agent :as download-agent]
-            [gtfs-feed-archive.cache-persistance :as cache-persistance])
+            [gtfs-feed-archive.cache-persistance :as cache-persistance]
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:use gtfs-feed-archive.util
         clojure.test
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
-;; todo: split all cache code off into its own namespace.
+;; TODO: split all cache code off into its own namespace.
 (declare cache-has-a-fresh-enough-copy?)
 
 ;; Store all download files in a cache data structure. The cache
@@ -129,8 +130,7 @@
     ;; means we won't run another download immediately.
     (if (feed-already-has-running-download-agent? feed-name
                                                   manager)
-      (do (format t "Download agent already running for ~A, not starting a new one.~%"
-                  feed-name)
+      (do (warn "Download agent already running for " feed-name  "not starting a new one.")
           manager)
       (do 
         (binding [download-agent/close-enough-cache-hit?
@@ -195,17 +195,14 @@
               some-broken-feeds (throw (IllegalStateException.
                                         (str "These feeds have not succeeded: "
                                              unsuccessful-feed-names)))        
-              ;; TODO: filter so we return at most one agent per feed-name!!
+              ;; TODO: filter fresh-successful-agents so we return at
+              ;; most one agent per feed-name!!
               all-feeds-ok fresh-successful-agents
               :else (do (Thread/sleep 1000)
-                        (println "all feeds OK:" all-feeds-ok)
-                        (println "any agents still running?")
-                        (pprint any-agents-still-running) 
-                        (when false ;; for debugging.
-                          (println "successful agents:")
-                          (pprint successful-feed-names) 
-                          (println "not yet successful agents:")
-                          (pprint unsuccessful-feed-names))
+                        (debug "all feeds OK?" all-feeds-ok)
+                        (debug "any agents still running?" any-agents-still-running)
+                        (debug "successful agents:" successful-feed-names)
+                        (debug "not yet successful agents:" unsuccessful-feed-names)
                         (recur)))))))
 
 ;; returns a list of download agents with completed downloads of all feeds,

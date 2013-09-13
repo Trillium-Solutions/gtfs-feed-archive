@@ -1,6 +1,7 @@
 (ns gtfs-feed-archive.command-line
   (:refer-clojure :exclude [format])   ;; I like cl-format better...
-  (:require clojure.set)
+  (:require clojure.set
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:use gtfs-feed-archive.util 
         clojure.test
         [clojure.tools.cli :only [cli]] ;; Command-line parsing.
@@ -15,7 +16,7 @@
                              (hash-set val))))
         parse-date (fn [arg] (when-let [d (clj-time.format/parse-local (clj-time.format/formatters :date)
                                                                        arg)] (.toDate d)))
-        cli-format ["Create a GTFS feed archive."
+        cli-format ["Create a GTFS feed archive. http://github.com/ed-g/gtfs-feed-archive"
                     ["-o" "--output-directory" "Directory to place output zip files into."]
                     ["-i" "--input-csv"
                      "Input CSV feed list file." :assoc-fn set-merge]
@@ -34,7 +35,7 @@
                                (System/exit 1))
         [options plain-args _]
         (try (apply cli args cli-format)
-             (catch Exception e (do (println "Error parsing command line: " e)
+             (catch Exception e (do (error "Error parsing command line: " e)
                                     (print-usage-and-die!))))]
     ;; See if we have all the information we need to create an archive.
     ;; If not, print usage information and bail.

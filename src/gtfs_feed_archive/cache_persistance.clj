@@ -1,6 +1,7 @@
 (ns gtfs-feed-archive.cache-persistance
   (:refer-clojure :exclude [format]) ;; I like cl-format better.
-  (:require [clojure.edn :as edn])
+  (:require [clojure.edn :as edn]
+            [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:require [gtfs-feed-archive.download-agent :as download-agent])
   (:use gtfs-feed-archive.util
         clojure.test
