@@ -32,8 +32,8 @@
               (format t "~a~%~a~%" usage-text malfunction)
               (System/exit 1)))
           (parse-date [arg] (try
-                              (let [d (clj-time.format/parse-local (clj-time.format/formatters :date)
-                                                                   arg)] (.toDate d))
+                              (let [d (clj-time.format/parse-local (clj-time.format/formatters :date) arg)]
+                                (.toDate d))
                               (catch Exception e (print-usage-and-die!
                                                   "Please format dates as RFC 3339: YYYY-MM-DD."))))]
     (let [[options plain-args _]
@@ -42,9 +42,6 @@
                                       (print-usage-and-die! "Cannot parse command line."))))] 
       ;; See if we have all the information we need to create an archive.
       ;; If not, print usage information and bail.
-      (info "since options" (:since options))
-      (when-not (every? identity (:since options))
-        (print-usage-and-die! "Please format dates as RFC 3339: YYYY-MM-DD."))
       (when-not (pos? (count (:input-csv options)))
         (print-usage-and-die! "Please supply at least one input CSV feed list file."))
       (when-not (pos? (count (:output-directory options)))
