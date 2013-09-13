@@ -124,6 +124,6 @@
                                  new-enough-agents)))))))
 
 (defn -main [& args]
-  (timbre/set-level! :warn)
+  ;;(timbre/set-level! :warn)
   (apply run-command-line args))
 
