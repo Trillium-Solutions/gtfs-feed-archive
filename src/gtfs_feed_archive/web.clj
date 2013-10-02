@@ -1,6 +1,6 @@
 (ns gtfs-feed-archive.web
   (:gen-class)
-  (:refer-clojure :exclude [format]) ;; I like cl-format better...
+  (:refer-clojure :exclude [format]) ;; I like cl-format.
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
             [ring.adapter.jetty :as jetty] 
@@ -14,6 +14,8 @@
             [gtfs-feed-archive.command-line :as command-line])
   (:use compojure.core
         [hiccup.core :only [h html]]
+        hiccup.page ;; html5.
+        hiccup.form ;; form-to, check-box, ...
         gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
@@ -24,16 +26,23 @@
 (javadoc-helper/set-local-documentation-source!)
 
 (defroutes app
-  (GET "/" [] "<h1>Hello There!</h1>")
-  (GET "/h" [] (h/html
-                [:h1 "Hello from Hiccup!"]))
-  (GET "/g/:a" [a b :as r] (html
-                            [:head [:title "Parameter demonstration."]]
-                            [:body
-                             [:h1 "Parameter demonstration."]
-                             [:p "The path after /g/ is " (h a) ]
-                             [:p "Query-string variable b is " (h b) ]
-                             [:p "Full request map is " (h r) ]]))
+  (GET "/" [] (html [:h1 "Hello There!"]))
+  (GET "/f" [a b]
+    (html [:head [:title "Forms demonstration."]]
+          [:body
+           [:h1 "Forms Demonstration"]
+           (form-to [:post ""] ;; current URL.
+                    [:label "A" (check-box "a" false "a")] 
+                    (submit-button {:name "submit"} "Submit!")
+                    )
+           ]))
+  (GET "/g/:a" [a b :as r]
+    (html [:head [:title "Parameter demonstration."]]
+          [:body
+           [:h1 "Parameter demonstration."]
+           [:p "The path after /g/ is " (h a) ]
+           [:p "Query-string variable b is " (h b) ]
+           [:p "Full request map is " (h r) ]]))
   (route/not-found (html [:h1 "Page not found"])))
 
 (def app-site (handler/site app))
