@@ -8,7 +8,7 @@
                  [com.velisco/clj-ftp "0.3.0"] ;; FTP client
                  [clojure-csv/clojure-csv "2.0.1"] ;; CSV read/write
                  [clj-time "0.6.0"] ;; Sane date and time library.
-                 [org.clojure/tools.cli "0.3.0"] ;; Command-line parsing.
+                 [org.clojure/tools.cli "0.3.1"] ;; Command-line parsing.
                  [com.taoensso/timbre "2.7.1"] ;; logging
                  [compojure "1.1.6"]
                  [hiccup "1.0.4"]
