@@ -197,7 +197,8 @@
                                              unsuccessful-feed-names)))        
               ;; TODO: filter fresh-successful-agents so we return at
               ;; most one agent per feed-name!!
-              all-feeds-ok fresh-successful-agents
+              all-feeds-ok (do (debug "all download agents succeeded")
+                               fresh-successful-agents)
               :else (do (Thread/sleep 1000)
                         (debug "all feeds OK?" all-feeds-ok)
                         (debug "any agents still running?" any-agents-still-running)

@@ -40,35 +40,46 @@
     {:status status :body response}))
 
 (defn status-demo []
-  (with-status 204 "Try back later."))
+  ;; to test: curl -v -v http://127.0.0.1:8081/status
+  ;; most browsers won't show the message, they disconnect as soon as they recieve the header.
+  (with-status 204 "Try back later.")) 
 
-(defhtml forms-page [a b]
+
+(defhtml forms-page [a b year month day]
   [:head [:title "Forms demonstration."]]
   [:body
    [:h1 "Forms Demonstration"]
-   (form-to [:post ""] ;; current URL.
+   (let [year (or year "2013")
+         month (or month "01")
+         day (or day "15")]
+     (form-to [:post ""] ;; current URL.
             [:p [:label "A" (check-box "a" a)] "value: " (h (pr-str a))]
             [:p [:label "B" (check-box "b" b)] "value: " (h (pr-str b))]
-            [:p "Date: " (date-selector "2013" "06" "01")]
-            (submit-button {:name "submit"} "Submit!"))])
+            [:p "Date: " (date-selector year month day)
+             "value: " (map (comp h pr-str) [year month day])]
+            (submit-button {:name "submit"} "Submit!")))])
 
 (defroutes app
-  (GET "/" [] (html [:h1 "Hello There!"]))
-  (POST "/f" [a b]
-    (forms-page a b))
-  (GET "/f" [a b]
-    (forms-page a b))
+  (GET "/" [] (html
+               [:h1 "Hello There!"]
+               [:p (link-to "/f" "Forms demo." )]
+               [:p (link-to "/g/path-text" "Parameter demo." )]))
+  (POST "/f" [a b year month day]
+    (forms-page a b year month day))
+  (GET "/f" [a b year month day]
+    (forms-page a b year month day))
   (GET "/status" [] (status-demo))
   (GET "/g/:a" [a b :as r]
     (html [:head [:title "Parameter demonstration."]]
           [:body
            [:h1 "Parameter demonstration."]
-           [:p "The path after /g/ is " (h a) ]
+           [:p "The path after /g/ is " (h a)]
            [:p "Query-string variable b is " (h b)]
            [:p "Full request map is " (h r) ]]))
   (route/not-found (html [:h1 "Page not found"])))
 
 (def app-site (handler/site app))
 
-(defonce server
-  (jetty/run-jetty #'app-site {:port 8081 :join? false}))
+(defn start-web-server! []
+  (defonce server
+    (jetty/run-jetty #'app-site {:port 8081 :join? false})))

@@ -136,7 +136,7 @@
                     (assoc :completion-date (now))
                     (assoc :file-saved true)))
             (let [response (http-or-ftp-get (:url state))]
-              (info "Cache does not contain a fresh-enough copy of " (:feed-name state) ", downloading." )
+              (info "Cache does not contain a fresh-enough copy of" (:feed-name state) "-- downloading." )
               (if (nil? response)
                 (assoc state :download-attempt ;; ok, we'll try again later.
                        (inc (:download-attempt state)))
