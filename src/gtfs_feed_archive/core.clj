@@ -106,7 +106,7 @@
         (cache-manager/set-cache-directory! dir))
       (cache-manager/load-cache-manager!)
       (info "Fetching" (count feeds ) "feeds.")
-      (let [finished-agents (cache-manager/fetch-feeds! feeds)]
+      (let [finished-agents (cache-manager/fetch-feeds-slow! feeds)]
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
