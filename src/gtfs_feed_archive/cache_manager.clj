@@ -229,4 +229,27 @@
       (Thread/sleep 5000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
       (wait-for-fresh-feeds! feeds start-time cache-manager))))
 
+(defn fetch-feeds-slow! [feeds]
+  (let [start-time (now)
+        delay-ms 1500]
+    (do 
+      (doseq [f feeds]
+        (Thread/sleep delay-ms ) ; wait between fetching feeds to avoid hammering a server.
+        (send-off cache-manager fetch-feed! f))
+      ;; FIXME: sometimes the wait-for-fresh-feeds! will return since
+      ;; the initial check happens before any agents have begun
+      ;; running.  is there a way to delay until at least the first
+      ;; state has been reached?  or is there a better way to handle
+      ;; this?
+      ;; 
+      ;; maybe we could first wait until any agents are running,
+      ;; *then* wait until the feeds begin. actually we'd want to wait
+      ;; until all the agents we care about are running, since it
+      ;; would theoretically be possible for one agent to fail before
+      ;; the others had even started. perhaps we should wait until we
+      ;; can find at least one failed agent for each feed before
+      ;; giving up.
+      (Thread/sleep 5000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
+      (wait-for-fresh-feeds! feeds start-time cache-manager))))
+
 

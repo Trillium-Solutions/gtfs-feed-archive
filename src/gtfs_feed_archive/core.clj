@@ -90,7 +90,8 @@
              ;;names (feed-names feeds)
              archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
              output-directory "/tmp/gtfs-archive-output"]
-         (let [finished-agents (cache-manager/fetch-feeds! feeds)]
+         (let [finished-agents (cache-manager/fetch-feeds-slow! feeds)]
+  ;;       (let [finished-agents (cache-manager/fetch-feeds! feeds)]
            ;; TODO: if there's an error, provide a log and notify the user somehow.
            (if finished-agents
              (build-feed-archive! archive-name output-directory finished-agents)
