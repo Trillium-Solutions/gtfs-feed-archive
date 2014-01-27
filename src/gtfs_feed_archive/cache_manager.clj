@@ -235,6 +235,7 @@
     (do 
       (doseq [f feeds]
         (Thread/sleep delay-ms ) ; wait between fetching feeds to avoid hammering a server.
+        (info "sending off feed:" f)
         (send-off cache-manager fetch-feed! f))
       ;; FIXME: sometimes the wait-for-fresh-feeds! will return since
       ;; the initial check happens before any agents have begun
