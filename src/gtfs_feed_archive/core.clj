@@ -110,7 +110,9 @@
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
-        (cache-manager/save-cache-manager!) ;; save cache status for next time.
+        (do 
+          (cache-manager/save-cache-manager!) ;; save cache status for next time.
+          (info "Cache saved."))
         (when (:all options)
           (build-feed-archive! (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now))) 
                                output-directory

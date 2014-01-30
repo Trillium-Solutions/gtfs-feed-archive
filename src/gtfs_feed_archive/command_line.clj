@@ -22,6 +22,9 @@
              ["-c" "--cache-directory" 
               "Cache directory for GTFS feed downloads."
               :default "/tmp/gtfs-cache/"]
+             ["-u" "--update"
+              "Fetch updated feeds from the Internet and store them in the cache."
+              :default false :flag true]
              ["-s" "--since-date"
               "Create an archive of feeds modified after date, e.g. 2013-08-23."
               :parse-fn parse-date :assoc-fn set-merge]
@@ -46,4 +49,6 @@
         (print-usage-and-die! "Please supply at least one input CSV feed list file."))
       (when-not (pos? (count (:output-directory options)))
         (print-usage-and-die! "Please indicate an output directory in which to create zip files."))
+      (when-not (or (:update options) (:since-date options) (:all options))
+        (print-usage-and-die! "Please use one of the --update, --since-date, or --all options."))        
       [options plain-args])))
