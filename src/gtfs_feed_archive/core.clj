@@ -111,7 +111,7 @@
             (cond (:update options) (cache-manager/fetch-feeds-slow! feeds)
                   (:freshness-hours options) (cache-manager/dont-fetch-feeds! feeds
                                                                               (java.util.Date.
-                                                                               (- (.getTime now)
+                                                                               (- (.getTime (now))
                                                                                   (* 1000 * 60 * 60 (:freshness-hours options))))))]
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
