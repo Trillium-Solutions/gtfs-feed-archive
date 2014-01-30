@@ -112,7 +112,8 @@
                   (:freshness-hours options) (cache-manager/dont-fetch-feeds! feeds
                                                                               (java.util.Date.
                                                                                (- (.getTime (now))
-                                                                                  (* 1000 60 60 (:freshness-hours options))))))]
+                                                                                  (int (* 1000 60 60
+                                                                                          (:freshness-hours options)))))))]
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
