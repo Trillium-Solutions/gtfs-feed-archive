@@ -166,7 +166,7 @@
         agents->names (fn [agents]
                         (into #{} (map (comp :feed-name deref)
                                        agents)))
-        give-up-time (java.util.Date. (+ (* 1000 60) ;; 60 seconds.
+        give-up-time (java.util.Date. (+ (* 1000 60 5) ;; 5 minutes.
                                          (.getTime (now))))]
     ;; should we track feed names, agents, or feeds? I think names.
     (loop []
@@ -199,7 +199,7 @@
               ;; most one agent per feed-name!!
               all-feeds-ok (do (debug "all download agents succeeded")
                                fresh-successful-agents)
-              :else (do (Thread/sleep 1000)
+              :else (do (Thread/sleep (* 1000 10)) ; 10 seconds
                         (debug "all feeds OK?" all-feeds-ok)
                         (debug "any agents still running?" any-agents-still-running)
                         (debug "successful agents:" successful-feed-names)
