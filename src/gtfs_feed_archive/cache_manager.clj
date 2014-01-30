@@ -155,6 +155,16 @@
                             deref)
                       manager)))) 
 
+(defn newest-agent-for-each-feed [agents]
+  (let [names (into #{} (map (comp :feed-name deref) agents))
+        newest-agents (for [n names]
+                        (first (sort-by (comp :last-modified deref)
+                                        (filter #(= n (:feed-name @%)) agents))))]
+    ;;(debug "names" names)
+    ;;(debug "newest-agents" newest-agents)
+    newest-agents))
+
+
 ;; Keep polling the cache-manager until all feeds have been freshly
 ;; downloaded on or after the freshness-date.  Returns a list of
 ;; download agents with completed downloads of all feeds, or throws an
@@ -198,13 +208,17 @@
               ;; TODO: filter fresh-successful-agents so we return at
               ;; most one agent per feed-name!!
               all-feeds-ok (do (debug "all download agents succeeded")
-                               fresh-successful-agents)
+                               (newest-agent-for-each-feed fresh-successful-agents))
               :else (do (Thread/sleep (* 1000 10)) ; 10 seconds
                         (debug "all feeds OK?" all-feeds-ok)
                         (debug "any agents still running?" any-agents-still-running)
                         (debug "successful agents:" successful-feed-names)
-                        (debug "not yet successful agents:" unsuccessful-feed-names)
+                        (debug "waiting for these agents:" unsuccessful-feed-names)
                         (recur)))))))
+
+(defn dont-fetch-feeds! [feeds fresh-time]
+  ;; return feeds from cache. this function needs a more descriptive name.
+  (wait-for-fresh-feeds! feeds fresh-time cache-manager))
 
 ;; returns a list of download agents with completed downloads of all feeds,
 ;; or throws an error.

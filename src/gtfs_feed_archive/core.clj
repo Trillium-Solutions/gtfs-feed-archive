@@ -100,13 +100,16 @@
 (defn run-command-line [& args]
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (let [output-directory (:output-directory options)
+          archive-prefix "Oregon-GTFS"
           feeds (mapcat read-csv-file (:input-csv options))]
       (when-let [dir (:cache-directory options)]
         (info "Setting cache directory:" dir)
         (cache-manager/set-cache-directory! dir))
       (cache-manager/load-cache-manager!)
       (info "Fetching" (count feeds ) "feeds.")
-      (let [finished-agents (cache-manager/fetch-feeds-slow! feeds)]
+      (let [finished-agents 
+            (cond (:update options) (cache-manager/fetch-feeds-slow! feeds)
+                  (:freshness-date options) (cache-manager/dont-fetch-feeds! feeds (:freshness-date options)))]
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
@@ -114,14 +117,14 @@
           (cache-manager/save-cache-manager!) ;; save cache status for next time.
           (info "Cache saved."))
         (when (:all options)
-          (build-feed-archive! (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now))) 
+          (build-feed-archive! (str archive-prefix "-feeds-" (inst->rfc3339-day (now))) 
                                output-directory
                                finished-agents))
         (doseq [s (:since-date options)]
           (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
                                           finished-agents)]
             (build-feed-archive!
-             (str "Oregon-GTFS-updated-from-" (inst->rfc3339-day s)
+             (str archive-prefix "-updated-from-" (inst->rfc3339-day s)
                   "-to-" (inst->rfc3339-day (now))) output-directory
                   new-enough-agents)))))))
 

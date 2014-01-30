@@ -25,6 +25,9 @@
              ["-u" "--update"
               "Fetch updated feeds from the Internet and store them in the cache."
               :default false :flag true]
+             ["-f" "--freshness-date"
+              "How fresh does the cache need to be?"
+              :parse-fn parse-date] ;; default to one day before now?
              ["-s" "--since-date"
               "Create an archive of feeds modified after date, e.g. 2013-08-23."
               :parse-fn parse-date :assoc-fn set-merge]
