@@ -127,5 +127,6 @@
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)
-  (apply run-command-line args))
+  (apply run-command-line args)
+  (shutdown-agents))
 
