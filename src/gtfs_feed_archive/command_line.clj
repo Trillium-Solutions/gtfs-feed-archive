@@ -50,5 +50,5 @@
       (when-not (pos? (count (:output-directory options)))
         (print-usage-and-die! "Please indicate an output directory in which to create zip files."))
       (when-not (or (:update options) (:since-date options) (:all options))
-        (print-usage-and-die! "Please use one of the --update, --since-date, or --all options."))        
+        (print-usage-and-die! "Please use one or more of the --update, --since-date, or --all options."))
       [options plain-args])))

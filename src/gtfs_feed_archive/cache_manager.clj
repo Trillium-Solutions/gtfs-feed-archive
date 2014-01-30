@@ -231,7 +231,7 @@
 
 (defn fetch-feeds-slow! [feeds]
   (let [start-time (now)
-        delay-ms 1500]
+        delay-ms 500]
     (do 
       (doseq [f feeds]
         (Thread/sleep delay-ms ) ; wait between fetching feeds to avoid hammering a server.
@@ -250,7 +250,5 @@
       ;; the others had even started. perhaps we should wait until we
       ;; can find at least one failed agent for each feed before
       ;; giving up.
-      (Thread/sleep 5000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
+      (Thread/sleep 2000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
       (wait-for-fresh-feeds! feeds start-time cache-manager))))
-
-

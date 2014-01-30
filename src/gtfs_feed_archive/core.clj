@@ -122,9 +122,8 @@
                                           finished-agents)]
             (build-feed-archive!
              (str "Oregon-GTFS-updated-from-" (inst->rfc3339-day s)
-                  "-to-" (inst->rfc3339-day (now))) 
-                                 output-directory
-                                 new-enough-agents)))))))
+                  "-to-" (inst->rfc3339-day (now))) output-directory
+                  new-enough-agents)))))))
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)
