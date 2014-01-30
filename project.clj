@@ -11,7 +11,7 @@
                  [org.clojure/tools.cli "0.3.1"] ;; Command-line parsing.
                  [com.taoensso/timbre "2.7.1"] ;; logging
                  [compojure "1.1.6"]
-                 [hiccup "1.0.4"]
+                 [hiccup "1.0.5"]
                  [ring/ring-core "1.2.1"]
                  [ring/ring-jetty-adapter "1.2.1"]]
   :main gtfs-feed-archive.core
