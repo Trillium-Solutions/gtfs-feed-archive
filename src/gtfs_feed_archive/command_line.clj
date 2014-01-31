@@ -30,7 +30,7 @@
               :default 24.0 ;; default to within the last day.
               :parse-fn #(Float/parseFloat %)
               :validate [#(< 0 %)
-                         "When getting fresh with me, please use a freshness greater than zero (hours)."]]
+                         "Please use a freshness greater than zero (hours)."]]
              ["-s" "--since-date"
               "Create an archive of feeds modified after date, e.g. 2013-08-23."
               :parse-fn parse-date :assoc-fn set-merge]

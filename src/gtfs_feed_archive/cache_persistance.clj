@@ -13,7 +13,7 @@
   [cache]
   ;; FIXME: split download-agent code into its own module so we can
   ;; include it both here and in the core module.
-  (filter (every-pred download-agent/completed? download-agent/not-a-copy?) 
+  (filter (every-pred download-agent/completed?) ;; download-agent/not-a-copy?
           (for [a @cache] @a)))
 
 (defn list->cache [lst]
