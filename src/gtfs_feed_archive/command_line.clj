@@ -25,6 +25,9 @@
              ["-u" "--update"
               "Fetch updated feeds from the Internet and store them in the cache."
               :default false :flag true]
+             ["-r" "--run-server"
+              "Run the built-in web server on http://localhost:8081"
+              :default false :flag true]
              ["-f" "--freshness-hours"
               "How many hours old can a cache item be, and still be considered fresh?"
               :default 24.0 ;; default to within the last day.
@@ -55,6 +58,7 @@
         (print-usage-and-die! "Please supply at least one input CSV feed list file."))
       (when-not (pos? (count (:output-directory options)))
         (print-usage-and-die! "Please indicate an output directory in which to create zip files."))
-      (when-not (or (:update options) (:since-date options) (:all options))
-        (print-usage-and-die! "Please use one or more of the --update, --since-date, or --all options."))
+      (when-not (or (:update options) (:since-date options) (:all options) (:run-server options))
+        (print-usage-and-die!
+         "Please use one or more of the --run-server, --update, --since-date, or --all options."))
       [options plain-args])))

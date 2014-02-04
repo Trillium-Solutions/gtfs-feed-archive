@@ -11,10 +11,16 @@
 (defn cache->list
   "List of all completed download agents."
   [cache]
-  ;; FIXME: split download-agent code into its own module so we can
-  ;; include it both here and in the core module.
-  (filter (every-pred download-agent/completed?) ;; download-agent/not-a-copy?
-          (for [a @cache] @a)))
+  ;; group agents by their last-modified time and feed-name, remove
+  ;; :im-just-a-copy, and keep only those which have the most recent completion-date.
+  (let [completed (filter download-agent/completed?
+                          (for [a @cache] @a))
+        without-copy-flags (map #(dissoc % :im-just-a-copy) completed)
+        by-name-modified (group-by (juxt :last-modified :feed-name)
+                                   without-copy-flags)
+        most-recent (map last (sort-by :completion-date
+                              (map second by-name-modified)))]
+    most-recent))
 
 (defn list->cache [lst]
   (agent

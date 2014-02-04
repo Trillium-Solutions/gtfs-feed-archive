@@ -44,7 +44,6 @@
   ;; most browsers won't show the message, they disconnect as soon as they recieve the header.
   (with-status 204 "Try back later.")) 
 
-
 (defhtml forms-page [a b year month day]
   [:head [:title "Forms demonstration."]]
   [:body
@@ -53,11 +52,11 @@
          month (or month "01")
          day (or day "15")]
      (form-to [:post ""] ;; current URL.
-            [:p [:label "A" (check-box "a" a)] "value: " (h (pr-str a))]
-            [:p [:label "B" (check-box "b" b)] "value: " (h (pr-str b))]
-            [:p "Date: " (date-selector year month day)
-             "value: " (map (comp h pr-str) [year month day])]
-            (submit-button {:name "submit"} "Submit!")))])
+              [:p [:label "A" (check-box "a" a)] "value: " (h (pr-str a))]
+              [:p [:label "B" (check-box "b" b)] "value: " (h (pr-str b))]
+              [:p "Date: " (date-selector year month day)
+               "value: " (map (comp h pr-str) [year month day])]
+              (submit-button {:name "submit"} "Submit!")))])
 
 (defroutes app
   (GET "/" [] (html
@@ -81,5 +80,12 @@
 (def app-site (handler/site app))
 
 (defn start-web-server! []
-  (defonce server
+  (defonce ^:dynamic *web-server*
     (jetty/run-jetty #'app-site {:port 8081 :join? false})))
+
+(defn stop-web-server! []
+  (try 
+    (when *web-server*
+      (info "attempting to stop web server...")
+      (.stop *web-server*))
+    (catch Exception e nil)))
