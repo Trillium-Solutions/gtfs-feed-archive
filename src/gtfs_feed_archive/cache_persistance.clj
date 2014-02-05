@@ -15,7 +15,6 @@
   ;; :im-just-a-copy, and keep only those which have the most recent completion-date.
   (let [agents (map deref @cache)
         completed (for [a agents :when (download-agent/success? a)] a)
-        ;; without-copy-flags (map #(dissoc % :im-just-a-copy) completed)
         by-name-modified (map second (group-by (juxt :last-modified :feed-name)
                                                completed))
         most-recent (map #(last (sort-by :completion-date %)) by-name-modified)]
