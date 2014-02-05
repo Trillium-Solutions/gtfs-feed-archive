@@ -42,9 +42,9 @@
   (or (success? state)
       (failure? state)))
 
-(defn not-a-copy? "True if the agent does not represent a copy of another download agent's file."
-  [state]
-  (not (:im-just-a-copy state)))
+;;(defn not-a-copy? "True if the agent does not represent a copy of another download agent's file."
+;;  [state]
+;;  (not (:im-just-a-copy state)))
 
 (def still-running?
   (complement completed?))
@@ -130,7 +130,8 @@
                     (dissoc :download-attempt)
                     (dissoc :destination-dir) 
                     ;; for debugging, so we know which are original download agents:
-                    (assoc :im-just-a-copy true) 
+                    ;; looks like we just don't need to know that often.
+                    ;; (assoc :im-just-a-copy true) 
                     (assoc :file-name (:file-name fresh-copy)) ;; copy the file name
                     (assoc :last-modified (:last-modified fresh-copy)) ;; and modification time
                     (assoc :completion-date (now))

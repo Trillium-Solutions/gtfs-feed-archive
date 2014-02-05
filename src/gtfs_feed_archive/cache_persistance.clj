@@ -9,17 +9,16 @@
         [clojure.pprint :rename {cl-format format}]))
 
 (defn cache->list
-  "List of all completed download agents."
+  "List of all completed, successful download agents."
   [cache]
   ;; group agents by their last-modified time and feed-name, remove
   ;; :im-just-a-copy, and keep only those which have the most recent completion-date.
-  (let [completed (filter download-agent/completed?
-                          (for [a @cache] @a))
-        without-copy-flags (map #(dissoc % :im-just-a-copy) completed)
-        by-name-modified (group-by (juxt :last-modified :feed-name)
-                                   without-copy-flags)
-        most-recent (map last (sort-by :completion-date
-                              (map second by-name-modified)))]
+  (let [agents (map deref @cache)
+        completed (for [a agents :when (download-agent/success? a)] a)
+        ;; without-copy-flags (map #(dissoc % :im-just-a-copy) completed)
+        by-name-modified (map second (group-by (juxt :last-modified :feed-name)
+                                               completed))
+        most-recent (map #(last (sort-by :completion-date %)) by-name-modified)]
     most-recent))
 
 (defn list->cache [lst]
