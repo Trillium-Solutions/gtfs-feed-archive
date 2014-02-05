@@ -22,12 +22,20 @@
              ["-c" "--cache-directory" 
               "Cache directory for GTFS feed downloads."
               :default "/tmp/gtfs-cache/"]
+             ["-n" "--archive-name-prefix" "File name prefix for archives"
+              :default "Oregon-GTFS"]
              ["-u" "--update"
               "Fetch updated feeds from the Internet and store them in the cache."
               :default false :flag true]
              ["-r" "--run-server"
-              "Run the built-in web server on http://localhost:8081"
+              "Run the built-in web server on http://localhost:server-port"
               :default false :flag true]
+             ["-p" "--server-port"
+              "Which port should the built-in web server listen on?"
+              :default 8081
+              :parse-fn #(Integer/parseInt %)
+              :validate [#(< 1 % 65535)
+                         "Please use a port between 1 and 65535."]]
              ["-f" "--freshness-hours"
               "How many hours old can a cache item be, and still be considered fresh?"
               :default 24.0 ;; default to within the last day.

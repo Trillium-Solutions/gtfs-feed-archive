@@ -104,7 +104,7 @@
   ;; as from the command line.
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (let [output-directory (:output-directory options)
-          archive-prefix "Oregon-GTFS"
+          archive-prefix (:archive-name-prefix options) ;; "Oregon-GTFS"
           feeds (into #{} (mapcat read-csv-file (:input-csv options)))]
       (when-let [dir (:cache-directory options)]
         (info "Setting cache directory:" dir)
@@ -113,7 +113,7 @@
       (info "Looking at " (count feeds ) "feeds.")
       (let [finished-agents 
             (cond (:update options) (cache-manager/fetch-feeds-slow! feeds)
-                  (:freshness-hours options) (cache-manager/dont-fetch-feeds! feeds
+                  (:freshness-hours options) (cache-manager/verify-feeds-are-fresh! feeds
                                                                               (java.util.Date.
                                                                                (- (.getTime (now))
                                                                                   (int (* 1000 60 60
@@ -136,7 +136,7 @@
                   "-to-" (inst->rfc3339-day (now))) output-directory
                   new-enough-agents)))
         (when (:run-server options)
-          (web/start-web-server!)
+          (web/start-web-server! (:server-port options))
           (loop []
             (Thread/sleep 1000)
             ;;(info "Web server still running")

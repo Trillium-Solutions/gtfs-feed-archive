@@ -55,7 +55,7 @@
               [:p [:label "A" (check-box "a" a)] "value: " (h (pr-str a))]
               [:p [:label "B" (check-box "b" b)] "value: " (h (pr-str b))]
               [:p "Date: " (date-selector year month day)
-               "value: " (map (comp h pr-str) [year month day])]
+               "value: " (map (comp h str) [year "-" month "-" day])]
               (submit-button {:name "submit"} "Submit!")))])
 
 (defroutes app
@@ -79,13 +79,24 @@
 
 (def app-site (handler/site app))
 
-(defn start-web-server! []
-  (defonce ^:dynamic *web-server*
-    (jetty/run-jetty #'app-site {:port 8081 :join? false})))
+
+;; rebound in start/stop-web-server.
+(defonce ^:dynamic *web-server* nil)
 
 (defn stop-web-server! []
   (try 
     (when *web-server*
       (info "attempting to stop web server...")
-      (.stop *web-server*))
+      (.stop *web-server*)
+      (def ^:dynamic *web-server* nil))
     (catch Exception e nil)))
+
+;; actually this is a restart operation.
+(defn start-web-server!
+  ([]
+     (start-web-server! 8081))
+  ([port]
+     (stop-web-server!)
+     (def ^:dynamic *web-server*
+       (jetty/run-jetty #'app-site {:port port :join? false}))))
+

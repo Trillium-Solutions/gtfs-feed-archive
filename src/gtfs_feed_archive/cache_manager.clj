@@ -216,7 +216,7 @@
                         (debug "waiting for these agents:" unsuccessful-feed-names)
                         (recur)))))))
 
-(defn dont-fetch-feeds! [feeds fresh-time]
+(defn verify-feeds-are-fresh! [feeds fresh-time]
   ;; return feeds from cache. this function needs a more descriptive name.
   (wait-for-fresh-feeds! feeds fresh-time cache-manager))
 
