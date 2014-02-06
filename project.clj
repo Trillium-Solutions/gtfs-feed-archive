@@ -13,6 +13,7 @@
                  [compojure "1.1.6"]
                  [hiccup "1.0.5"]
                  [ring/ring-core "1.2.1"]
-                 [ring/ring-jetty-adapter "1.2.1"]]
+                 [ring/ring-jetty-adapter "1.2.1"]
+                 [org.clojure/tools.nrepl "0.2.3"]]
   :main gtfs-feed-archive.core
   :aot [gtfs-feed-archive.core])
