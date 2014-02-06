@@ -98,26 +98,42 @@
              (build-feed-archive! archive-name output-directory finished-agents)
              (error "Error fetching public GTFS feeds."))))))
 
+(def ^:dynamic *web-server-port*)
+(def ^:dynamic *archive-output-directory*)
+(def ^:dynamic *archive-filename-prefix*)
+(def ^:dynamic *input-csv-files*)
+(def ^:dynamic *feeds*)
+(def ^:dynamic *cache-directory*) 
+(def ^:dynamic *cache-manager*) ;; TODO -- use this instead of global definition
+(def ^:dynamic *freshness-hours*)
+;;(def ^:dynamic )
+
+
 (defn run-command-line [& args]
   ;; TODO: split out all these option handlers into their own
   ;; functions, so we can call them as easily from the web interface
   ;; as from the command line.
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
-    (let [output-directory (:output-directory options)
-          archive-prefix (:archive-name-prefix options) ;; "Oregon-GTFS"
-          feeds (into #{} (mapcat read-csv-file (:input-csv options)))]
-      (when-let [dir (:cache-directory options)]
-        (info "Setting cache directory:" dir)
-        (cache-manager/set-cache-directory! dir))
+    (binding [*archive-output-directory* (:output-directory options)
+              *archive-filename-prefix* (:archive-name-prefix options)
+              *input-csv-files* (:input-csv options)
+              *feeds* (into #{} (mapcat read-csv-file *input-csv-files*))
+              *cache-directory* (:cache-directory options)
+              *freshness-hours* (:freshness-hours options)
+              *web-server-port* (:server-port options)
+              ]
+      (info "Setting cache directory:" *cache-directory*)
+      (cache-manager/set-cache-directory! *cache-directory*)
       (cache-manager/load-cache-manager!)
-      (info "Looking at " (count feeds ) "feeds.")
+      (info "Looking at " (count *feeds* ) "feeds.")
       (let [finished-agents 
-            (cond (:update options) (cache-manager/fetch-feeds-slow! feeds)
-                  (:freshness-hours options) (cache-manager/verify-feeds-are-fresh! feeds
-                                                                              (java.util.Date.
-                                                                               (- (.getTime (now))
-                                                                                  (int (* 1000 60 60
-                                                                                          (:freshness-hours options)))))))]
+            (if (:update options)
+              (cache-manager/fetch-feeds-slow! *feeds*)
+              (cache-manager/verify-feeds-are-fresh! *feeds*
+                                                     (java.util.Date.
+                                                      (- (.getTime (now))
+                                                         (int (* 1000 60 60
+                                                                 *freshness-hours*))))))]
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
@@ -125,18 +141,18 @@
           (cache-manager/save-cache-manager!) ;; save cache status for next time.
           (info "Cache saved."))
         (when (:all options)
-          (build-feed-archive! (str archive-prefix "-feeds-" (inst->rfc3339-day (now))) 
-                               output-directory
+          (build-feed-archive! (str *archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
+                               *archive-output-directory*
                                finished-agents))
         (doseq [s (:since-date options)]
           (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
                                           finished-agents)]
             (build-feed-archive!
-             (str archive-prefix "-updated-from-" (inst->rfc3339-day s)
-                  "-to-" (inst->rfc3339-day (now))) output-directory
+             (str *archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
+                  "-to-" (inst->rfc3339-day (now))) *archive-output-directory*
                   new-enough-agents)))
         (when (:run-server options)
-          (web/start-web-server! (:server-port options))
+          (web/start-web-server! (*web-server-port*))
           (loop []
             (Thread/sleep 1000)
             ;;(info "Web server still running")
