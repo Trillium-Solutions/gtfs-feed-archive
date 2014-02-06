@@ -4,13 +4,15 @@
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
             [miner.ftp :as ftp]
+            [clojure.tools.nrepl.server :as nrepl-server]
             [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)]
             [gtfs-feed-archive.javadoc-helper :as javadoc-helper]
             [gtfs-feed-archive.cache-persistance :as cache-persistance]
             [gtfs-feed-archive.cache-manager :as cache-manager]
             [gtfs-feed-archive.download-agent :as download-agent]
             [gtfs-feed-archive.command-line :as command-line]
-            [gtfs-feed-archive.web :as web])
+            [gtfs-feed-archive.web :as web]
+            )
   (:use gtfs-feed-archive.util 
         clojure.test
         clojure-csv.core
@@ -98,7 +100,7 @@
              (build-feed-archive! archive-name output-directory finished-agents)
              (error "Error fetching public GTFS feeds."))))))
 
-(def ^:dynamic *web-server-port*)
+;; (def ^:dynamic *web-server-port*)
 (def ^:dynamic *archive-output-directory*)
 (def ^:dynamic *archive-filename-prefix*)
 ;; Remembering CSV files, instead of the feeds they represent, has the
@@ -108,6 +110,7 @@
  ;; TODO -- change cache-manager.clj to use this instead of global definition.
 (def ^:dynamic *cache-manager*)
 (def ^:dynamic *freshness-hours*)
+(def ^:dynamic *nrepl-server* (atom nil))
 
 (defn run-command-line [& args]
   ;; TODO: split out all these option handlers into their own
@@ -119,9 +122,19 @@
               *input-csv-files*  (:input-csv options)
               *cache-directory* (:cache-directory options)
               *freshness-hours* (:freshness-hours options)
-              *web-server-port* (:server-port options)
+              web/*web-server-port* (:server-port options)
               ]
       (info "Setting cache directory:" *cache-directory*)
+      (info "nrepl-port: "(:nrepl-port options))
+      (when-let [p (:nrepl-port options)]
+        (reset! *nrepl-server* 
+                (nrepl-server/start-server :bind "127.0.0.1" :port p)))
+      (info "*nrepl-server*: " *nrepl-server* )
+
+
+      ;;(when (@*nrepl-server*)
+      ;;  (info "Started nrepl server on port:" (:nrepl-port options)))
+
       (cache-manager/set-cache-directory! *cache-directory*)
       (cache-manager/load-cache-manager!)
       ;; (info "Looking at " (count feeds) "feeds.")
@@ -152,7 +165,7 @@
                   "-to-" (inst->rfc3339-day (now))) *archive-output-directory*
                   new-enough-agents)))
         (when (:run-server options)
-          (web/start-web-server! (*web-server-port*))
+          (web/start-web-server!  #_(*web-server-port*))
           (loop []
             (Thread/sleep 1000)
             ;;(info "Web server still running")

@@ -46,7 +46,14 @@
               "Create an archive of feeds modified after date, e.g. 2013-08-23."
               :parse-fn parse-date :assoc-fn set-merge]
              ["-a" "--all"
-              "Make an archive of all feeds." :default false :flag true]])
+              "Make an archive of all feeds." :default false :flag true]
+             ["-N" "--nrepl-port"
+              "If defined, start a network REPL listening on this port."
+              :default nil
+              :parse-fn #(Integer/parseInt %)
+              :validate [#(< 1 % 65535)
+                         "Please use a port between 1 and 65535."]]
+             ])
           (print-usage-and-die! [malfunction]
             (let [[_ _ usage-text] (apply cli nil (cli-format))]
               (format t "~a~%~a~%" usage-text malfunction)

@@ -83,6 +83,8 @@
 ;; rebound in start/stop-web-server.
 (defonce ^:dynamic *web-server* nil)
 
+(def ^:dynamic *web-server-port*)
+
 (defn stop-web-server! []
   (try 
     (when *web-server*
@@ -94,7 +96,7 @@
 ;; actually this is a restart operation.
 (defn start-web-server!
   ([]
-     (start-web-server! 8081))
+     (start-web-server! *web-server-port*))
   ([port]
      (stop-web-server!)
      (def ^:dynamic *web-server*
