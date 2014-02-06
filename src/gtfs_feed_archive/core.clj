@@ -101,13 +101,13 @@
 (def ^:dynamic *web-server-port*)
 (def ^:dynamic *archive-output-directory*)
 (def ^:dynamic *archive-filename-prefix*)
-(def ^:dynamic *input-csv-files*)
-(def ^:dynamic *feeds*)
+;; Remembering CSV files, instead of the feeds they represent, has the
+;; feature of allwing the user to update CSV files between runs.
+(def ^:dynamic *input-csv-files*)  ;; (def ^:dynamic *feeds*)
 (def ^:dynamic *cache-directory*) 
-(def ^:dynamic *cache-manager*) ;; TODO -- use this instead of global definition
+ ;; TODO -- change cache-manager.clj to use this instead of global definition.
+(def ^:dynamic *cache-manager*)
 (def ^:dynamic *freshness-hours*)
-;;(def ^:dynamic )
-
 
 (defn run-command-line [& args]
   ;; TODO: split out all these option handlers into their own
@@ -116,8 +116,7 @@
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (binding [*archive-output-directory* (:output-directory options)
               *archive-filename-prefix* (:archive-name-prefix options)
-              *input-csv-files* (:input-csv options)
-              *feeds* (into #{} (mapcat read-csv-file *input-csv-files*))
+              *input-csv-files*  (:input-csv options)
               *cache-directory* (:cache-directory options)
               *freshness-hours* (:freshness-hours options)
               *web-server-port* (:server-port options)
@@ -125,11 +124,12 @@
       (info "Setting cache directory:" *cache-directory*)
       (cache-manager/set-cache-directory! *cache-directory*)
       (cache-manager/load-cache-manager!)
-      (info "Looking at " (count *feeds* ) "feeds.")
-      (let [finished-agents 
+      ;; (info "Looking at " (count feeds) "feeds.")
+      (let [feeds (into #{} (mapcat read-csv-file (:input-csv options)))
+            finished-agents 
             (if (:update options)
-              (cache-manager/fetch-feeds-slow! *feeds*)
-              (cache-manager/verify-feeds-are-fresh! *feeds*
+              (cache-manager/fetch-feeds-slow! feeds)
+              (cache-manager/verify-feeds-are-fresh! feeds
                                                      (java.util.Date.
                                                       (- (.getTime (now))
                                                          (int (* 1000 60 60
