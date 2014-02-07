@@ -131,13 +131,8 @@
                 (nrepl-server/start-server :bind "127.0.0.1" :port p)))
       (info "*nrepl-server*: " *nrepl-server* )
 
-
-      ;;(when (@*nrepl-server*)
-      ;;  (info "Started nrepl server on port:" (:nrepl-port options)))
-
       (cache-manager/set-cache-directory! *cache-directory*)
       (cache-manager/load-cache-manager!)
-      ;; (info "Looking at " (count feeds) "feeds.")
       (let [feeds (into #{} (mapcat read-csv-file (:input-csv options)))
             finished-agents 
             (if (:update options)
@@ -147,6 +142,7 @@
                                                       (- (.getTime (now))
                                                          (int (* 1000 60 60
                                                                  *freshness-hours*))))))]
+        (info "Looked at " (count feeds) "feeds.")
         (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
@@ -165,11 +161,12 @@
                   "-to-" (inst->rfc3339-day (now))) *archive-output-directory*
                   new-enough-agents)))
         (when (:run-server options)
-          (web/start-web-server!  #_(*web-server-port*))
-          (loop []
-            (Thread/sleep 1000)
-            ;;(info "Web server still running")
-            (recur)))))))
+          (binding [web/*example* "bound by core"]
+            (web/start-web-server!  #_(*web-server-port*))
+            (loop []
+              (Thread/sleep 1000)
+              ;;(info "Web server still running")
+              (recur))))))))
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)

@@ -25,6 +25,9 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
+
+(def ^:dynamic *example* "default")
+
 (javadoc-helper/set-local-documentation-source!)
 
 (defhtml date-selector [year month day]
@@ -58,6 +61,15 @@
                "value: " (map (comp h str) [year "-" month "-" day])]
               (submit-button {:name "submit"} "Submit!")))])
 
+(defhtml variables-demo []
+  [:head [:title "Variables Demonstration."]]
+  [:body
+   [:h1 "Variables Demonstration"]
+   [:p "*out*: " (h *out*)]
+   [:p "*example*: " (h *example*)]
+   ;;[:p "*input-csv-files*: " (h gtfs-feed-archive.core/*input-csv-files*)]
+   ])
+
 (defroutes app
   (GET "/" [] (html
                [:h1 "Hello There!"]
@@ -75,6 +87,8 @@
            [:p "The path after /g/ is " (h a)]
            [:p "Query-string variable b is " (h b)]
            [:p "Full request map is " (h r) ]]))
+  (GET "/v" []
+    (variables-demo))
   (route/not-found (html [:h1 "Page not found"])))
 
 (def app-site (handler/site app))
