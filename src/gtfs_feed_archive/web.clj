@@ -69,7 +69,13 @@
    [:p "*out*: " (h *out*)]
    [:p "input csv " (h @config/*input-csv-files*)]
    [:p "cache dir " (h @config/*cache-directory*)]
-   [:p "cache manager " (h @config/*cache-manager*)]
+   (let [cm @config/*cache-manager*]
+     [:p "cache manager holds "  (count cm) " entries:"
+      [:ol 
+      (for [a @config/*cache-manager*]
+        [:li (h @a) ] )
+      ]])
+   ;; (h @config/*cache-manager*)]
    ;;[:p "*input-csv-files*: " (h gtfs-feed-archive.core/*input-csv-files*)]
    ])
 

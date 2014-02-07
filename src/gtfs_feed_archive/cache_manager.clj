@@ -11,7 +11,6 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
-;; TODO: split all cache code off into its own namespace.
 (declare cache-has-a-fresh-enough-copy?)
 
 ;; Store all download files in a cache data structure. The cache
@@ -65,38 +64,24 @@
 ;;      happen if we accidentally started more than one copy of the
 ;;      application.
 
-;; (def ^:dynamic *cache-directory* "/tmp/gtfs-feed-archive-cache")
-
-;;(defn set-cache-directory! [dir]
-;;  ;;(reset! config/*cache-directory
-;;  (def ^:dynamic *cache-directory* dir))
-
 (defn cache-directory [] @config/*cache-directory*)
 
 (defn cache-file [] (str (cache-directory) "/cache.edn"))
 (defn cache-file-backup [] (str (cache-file) ".1"))
 
-;;(def +cache-file+ "/tmp/gtfs-cache/cache.edn")
-;;(def +cache-file-backup+ (str +cache-file+ ".1"))
-
-(def cache-manager (agent []))
-
 (defn load-cache-manager! "Load a new cache mananger from disk, if possible."
   []
   ;; TODO: verify that all files referenced in the cache exist.
-;  (def cache-manager
   (let [cache-contents (or (cache-persistance/read-cache (cache-file))
                            (vector))]
     (if (agent-error config/*cache-manager*)
       (restart-agent  config/*cache-manager* cache-contents)
       (send-off   config/*cache-manager* (fn [_] cache-contents)))))
-;;    (or (cache-persistance/read-cache (cache-file))
-;;        (agent []))))
 
 (defn save-cache-manager! []
   (.renameTo (clojure.java.io/file (cache-file)) 
              (clojure.java.io/file (cache-file-backup)))
-  (cache-persistance/write-cache! cache-manager (cache-file)))
+  (cache-persistance/write-cache! config/*cache-manager* (cache-file)))
 
 ;;; for debugging
 (defn !reset-cache-manager! []
@@ -105,7 +90,6 @@
   (if (agent-error config/*cache-manager*)
     (restart-agent config/*cache-manager* [])
     (send-off config/*cache-manager* (fn [_] []))))
-  ;;  (def cache-manager (agent [])))
 
 
 (defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
@@ -114,7 +98,7 @@
   ;;
   ;; If the modified-date is newer than the file in the cache, by more than
   ;; the refresh-interval, we should use the new copy.
-  (let [download-agents @cache-manager
+  (let [download-agents @config/*cache-manager*
         refresh-interval (* 1000 60 60) ;; one hour
         cutoff (java.util.Date. (- (.getTime modified-date)
                                    refresh-interval))
@@ -153,7 +137,7 @@
         (conj manager d)))))
 
 (defn show-cache-manager-info []
-  (doseq [a @cache-manager]
+  (doseq [a @config/*cache-manager*]
     (let [a (deref a)]
       (println "")
       (doseq [k (keys a)]
@@ -163,7 +147,7 @@
 
 (defn clean-cache-example! "example cache cleaning code"
   []
-  (send-off cache-manager
+  (send-off config/*cache-manager*
             (fn [manager]
               (remove (comp (partial download-agent/has-feed-name? "trimet-portland-or-us")
                             deref)
@@ -232,7 +216,7 @@
 
 (defn verify-feeds-are-fresh! [feeds fresh-time]
   ;; return feeds from cache. this function needs a more descriptive name.
-  (wait-for-fresh-feeds! feeds fresh-time cache-manager))
+  (wait-for-fresh-feeds! feeds fresh-time config/*cache-manager*))
 
 ;; returns a list of download agents with completed downloads of all feeds,
 ;; or throws an error.
@@ -240,7 +224,7 @@
   (let [start-time (now)]
     (do 
       (doseq [f feeds]
-        (send-off cache-manager fetch-feed! f))
+        (send-off config/*cache-manager* fetch-feed! f))
       ;; FIXME: sometimes the wait-for-fresh-feeds! will return since
       ;; the initial check happens before any agents have begun
       ;; running.  is there a way to delay until at least the first
@@ -255,7 +239,7 @@
       ;; can find at least one failed agent for each feed before
       ;; giving up.
       (Thread/sleep 5000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
-      (wait-for-fresh-feeds! feeds start-time cache-manager))))
+      (wait-for-fresh-feeds! feeds start-time config/*cache-manager*))))
 
 (defn fetch-feeds-slow! [feeds]
   (let [start-time (now)
@@ -264,7 +248,7 @@
       (doseq [f feeds]
         (Thread/sleep delay-ms ) ; wait between fetching feeds to avoid hammering a server.
         (info "sending off feed:" f)
-        (send-off cache-manager fetch-feed! f))
+        (send-off config/*cache-manager* fetch-feed! f))
       ;; FIXME: sometimes the wait-for-fresh-feeds! will return since
       ;; the initial check happens before any agents have begun
       ;; running.  is there a way to delay until at least the first
@@ -279,4 +263,4 @@
       ;; can find at least one failed agent for each feed before
       ;; giving up.
       (Thread/sleep 2000) ;; HACK HACK HACK HACK HACK HACK HACK HACK
-      (wait-for-fresh-feeds! feeds start-time cache-manager))))
+      (wait-for-fresh-feeds! feeds start-time config/*cache-manager*))))

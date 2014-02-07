@@ -16,6 +16,7 @@
 
 (def t true);; for cl-format.
 
+
 (defmacro try-catch-nil
   "Evaluate form, or return nil if there was an exception."
   [form]
@@ -226,4 +227,45 @@
         data (rest csv)]
     (map (partial zipmap header)
          data)))
+
+(defn read-csv-file [filename]
+  (with-open [r (clojure.java.io/reader filename)]
+      (doall (csv->maps r))))
+
+;; contents can be a java.io.InputStream, in which case we'll loop and
+;; copy everything from the stream into the zip file.
+(defn make-zip-file
+  [output-file-name names-contents]
+  (with-open [z (java.util.zip.ZipOutputStream.
+           (clojure.java.io/output-stream output-file-name))]
+    (doseq [[name content] names-contents]
+      (.putNextEntry z (java.util.zip.ZipEntry. name))
+      (copy-data-to-stream content z))))
+
+
+(defn download-agents->last-updates-csv [download-agents]
+  ;; TODO: use the CSV file writer to ensure proper quoting so strange
+  ;; names and URLs don't have a chance to break the CSV file.
+  (let [header-str "zip_file_name,most_recent_update,feed_name,historical_download_url\r\n"]
+    (reduce str header-str
+            (for [a (map deref download-agents) ]
+              (str (str "feeds/"(:feed-name a) ".zip,")
+                   (inst->rfc3339-utc (:last-modified a)) ","
+                   (:feed-name a) ","
+                   (:url a) "\r\n")))))
+
+(defn download-agents->last-updates-csv-entry [download-agents]
+  ["last_updates.csv" (download-agents->last-updates-csv download-agents)])
+
+(defn download-agents->zip-file-list
+  "Build a list of file names and contents from successful download agents.
+   May throw an exception if agents do not have files or their files are not readable."
+  [download-agents]
+  (for [a (map deref download-agents) ]
+    [(str "feeds/"(:feed-name a) ".zip")
+     (clojure.java.io/input-stream (:file-name a))]))
+
+(defn prepend-path-to-file-list [path zip-file-list]
+  (for [[name data] zip-file-list] 
+    [(str path "/" name) data]))
 

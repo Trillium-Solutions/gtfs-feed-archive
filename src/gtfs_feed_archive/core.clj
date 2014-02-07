@@ -11,6 +11,7 @@
             [gtfs-feed-archive.cache-manager :as cache-manager]
             [gtfs-feed-archive.download-agent :as download-agent]
             [gtfs-feed-archive.command-line :as command-line]
+            [gtfs-feed-archive.archive-creator :as archive-creator]
             [gtfs-feed-archive.config :as config]
             [gtfs-feed-archive.web :as web]
             )
@@ -23,52 +24,11 @@
 
 (javadoc-helper/set-local-documentation-source!)
 
-;; contents can be a java.io.InputStream, in which case we'll loop and
-;; copy everything from the stream into the zip file.
-(defn make-zip-file
-  [output-file-name names-contents]
-  (with-open [z (java.util.zip.ZipOutputStream.
-           (clojure.java.io/output-stream output-file-name))]
-    (doseq [[name content] names-contents]
-      (.putNextEntry z (java.util.zip.ZipEntry. name))
-      (copy-data-to-stream content z))))
-
-(defn read-csv-file [filename]
-  (with-open [r (clojure.java.io/reader filename)]
-      (doall (csv->maps r))))
-
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
 (defn public-gtfs-feeds [] 
   (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"]
     (read-csv-file public-feeds)))
-
-
-(defn download-agents->last-updates-csv [download-agents]
-  ;; TODO: use the CSV file writer to ensure proper quoting so strange
-  ;; names and URLs don't have a chance to break the CSV file.
-  (let [header-str "zip_file_name,most_recent_update,feed_name,historical_download_url\r\n"]
-    (reduce str header-str
-            (for [a (map deref download-agents) ]
-              (str (str "feeds/"(:feed-name a) ".zip,")
-                   (inst->rfc3339-utc (:last-modified a)) ","
-                   (:feed-name a) ","
-                   (:url a) "\r\n")))))
-
-(defn download-agents->last-updates-csv-entry [download-agents]
-  ["last_updates.csv" (download-agents->last-updates-csv download-agents)])
-
-(defn download-agents->zip-file-list
-  "Build a list of file names and contents from successful download agents.
-   May throw an exception if agents do not have files or their files are not readable."
-  [download-agents]
-  (for [a (map deref download-agents) ]
-    [(str "feeds/"(:feed-name a) ".zip")
-     (clojure.java.io/input-stream (:file-name a))]))
-
-(defn prepend-path-to-file-list [path zip-file-list]
-  (for [[name data] zip-file-list] 
-    [(str path "/" name) data]))
 
 (defn build-feed-archive! 
   "Given an archive name, and a successful download agents, create an
@@ -133,20 +93,16 @@
               (nrepl-server/start-server :bind "127.0.0.1" :port p)))
     (info "*nrepl-server*: " config/*nrepl-server* )
     
-    ;; (cache-manager/set-cache-directory! @config/*cache-directory*)
     (cache-manager/load-cache-manager!)
-    (let [feeds (into #{} (mapcat read-csv-file @config/*input-csv-files*))
+    (let [
           finished-agents 
           (try 
             (if (:update options)
-              (cache-manager/fetch-feeds-slow! feeds)
-              (cache-manager/verify-feeds-are-fresh! feeds
-                                                     (java.util.Date.
-                                                      (- (.getTime (now))
-                                                         (int (* 1000 60 60
-                                                                 @config/*freshness-hours*))))))
+              (archive-creator/update-cache!)
+              (archive-creator/verify-cache-freshness!))
             (catch Exception e nil))]
-      (info "Looked at " (count feeds) "feeds.")
+
+      (info "Looked at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
       (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
