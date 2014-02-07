@@ -11,6 +11,7 @@
             [gtfs-feed-archive.cache-persistance :as cache-persistance]
             [gtfs-feed-archive.cache-manager :as cache-manager]
             [gtfs-feed-archive.download-agent :as download-agent]
+            [gtfs-feed-archive.config :as config]
             [gtfs-feed-archive.command-line :as command-line])
   (:use compojure.core
         [hiccup.core :only [h html]]
@@ -66,7 +67,9 @@
   [:body
    [:h1 "Variables Demonstration"]
    [:p "*out*: " (h *out*)]
-   [:p "*example*: " (h *example*)]
+   [:p "input csv " (h @config/*input-csv-files*)]
+   [:p "cache dir " (h @config/*cache-directory*)]
+   [:p "cache manager " (h @config/*cache-manager*)]
    ;;[:p "*input-csv-files*: " (h gtfs-feed-archive.core/*input-csv-files*)]
    ])
 
@@ -97,8 +100,6 @@
 ;; rebound in start/stop-web-server.
 (defonce ^:dynamic *web-server* nil)
 
-(def ^:dynamic *web-server-port*)
-
 (defn stop-web-server! []
   (try 
     (when *web-server*
@@ -110,7 +111,7 @@
 ;; actually this is a restart operation.
 (defn start-web-server!
   ([]
-     (start-web-server! *web-server-port*))
+     (start-web-server! @config/*web-server-port*))
   ([port]
      (stop-web-server!)
      (def ^:dynamic *web-server*

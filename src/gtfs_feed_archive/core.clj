@@ -11,6 +11,7 @@
             [gtfs-feed-archive.cache-manager :as cache-manager]
             [gtfs-feed-archive.download-agent :as download-agent]
             [gtfs-feed-archive.command-line :as command-line]
+            [gtfs-feed-archive.config :as config]
             [gtfs-feed-archive.web :as web]
             )
   (:use gtfs-feed-archive.util 
@@ -100,73 +101,75 @@
              (build-feed-archive! archive-name output-directory finished-agents)
              (error "Error fetching public GTFS feeds."))))))
 
-;; (def ^:dynamic *web-server-port*)
-(def ^:dynamic *archive-output-directory*)
-(def ^:dynamic *archive-filename-prefix*)
-;; Remembering CSV files, instead of the feeds they represent, has the
-;; feature of allwing the user to update CSV files between runs.
-(def ^:dynamic *input-csv-files*)  ;; (def ^:dynamic *feeds*)
-(def ^:dynamic *cache-directory*) 
- ;; TODO -- change cache-manager.clj to use this instead of global definition.
-(def ^:dynamic *cache-manager*)
-(def ^:dynamic *freshness-hours*)
-(def ^:dynamic *nrepl-server* (atom nil))
+(comment 
+  (def ^:dynamic *archive-output-directory*)
+  (def ^:dynamic *archive-filename-prefix*)
+  ;; Remembering CSV files, instead of the feeds they represent, has the
+  ;; feature of allwing the user to update CSV files between runs.
+  (def ^:dynamic *input-csv-files*)  ;; (def ^:dynamic *feeds*)
+  (def ^:dynamic *cache-directory*) 
+  ;; TODO -- change cache-manager.clj to use this instead of global definition.
+  (def ^:dynamic *cache-manager*)
+  (def ^:dynamic *freshness-hours*)
+  (def ^:dynamic *nrepl-server* (atom nil)))
 
 (defn run-command-line [& args]
   ;; TODO: split out all these option handlers into their own
   ;; functions, so we can call them as easily from the web interface
   ;; as from the command line.
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
-    (binding [*archive-output-directory* (:output-directory options)
-              *archive-filename-prefix* (:archive-name-prefix options)
-              *input-csv-files*  (:input-csv options)
-              *cache-directory* (:cache-directory options)
-              *freshness-hours* (:freshness-hours options)
-              web/*web-server-port* (:server-port options)
-              ]
-      (info "Setting cache directory:" *cache-directory*)
-      (info "nrepl-port: "(:nrepl-port options))
-      (when-let [p (:nrepl-port options)]
-        (reset! *nrepl-server* 
-                (nrepl-server/start-server :bind "127.0.0.1" :port p)))
-      (info "*nrepl-server*: " *nrepl-server* )
+    (reset! config/*archive-output-directory* (:output-directory options))
+    (reset! config/*archive-filename-prefix* (:archive-name-prefix options))
+    (reset! config/*input-csv-files*  (:input-csv options))
+    (reset! config/*cache-directory* (:cache-directory options))
+    (reset! config/*freshness-hours* (:freshness-hours options))
+    (reset! config/*web-server-port* (:server-port options))
+    (reset! config/*nrepl-port* (:nrepl-port options))
 
-      (cache-manager/set-cache-directory! *cache-directory*)
-      (cache-manager/load-cache-manager!)
-      (let [feeds (into #{} (mapcat read-csv-file (:input-csv options)))
-            finished-agents 
+    (info "Setting cache directory:" @config/*cache-directory*)
+    (info "nrepl-port: " @config/*nrepl-port*)
+    (when-let [p @config/*nrepl-port*]
+      (reset! config/*nrepl-server* 
+              (nrepl-server/start-server :bind "127.0.0.1" :port p)))
+    (info "*nrepl-server*: " config/*nrepl-server* )
+    
+    ;; (cache-manager/set-cache-directory! @config/*cache-directory*)
+    (cache-manager/load-cache-manager!)
+    (let [feeds (into #{} (mapcat read-csv-file @config/*input-csv-files*))
+          finished-agents 
+          (try 
             (if (:update options)
               (cache-manager/fetch-feeds-slow! feeds)
               (cache-manager/verify-feeds-are-fresh! feeds
                                                      (java.util.Date.
                                                       (- (.getTime (now))
                                                          (int (* 1000 60 60
-                                                                 *freshness-hours*))))))]
-        (info "Looked at " (count feeds) "feeds.")
-        (when-not finished-agents
+                                                                 @config/*freshness-hours*))))))
+            (catch Exception e nil))]
+      (info "Looked at " (count feeds) "feeds.")
+      (when-not finished-agents
           (error "Error updating feeds, sorry!")
           (System/exit 1))
-        (do 
-          (cache-manager/save-cache-manager!) ;; save cache status for next time.
-          (info "Cache saved."))
-        (when (:all options)
-          (build-feed-archive! (str *archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
-                               *archive-output-directory*
-                               finished-agents))
-        (doseq [s (:since-date options)]
-          (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
-                                          finished-agents)]
+      (do 
+        (cache-manager/save-cache-manager!) ;; save cache status for next time.
+        (info "Cache saved."))
+      (when (:all options)
+        (build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
+                             @config/*archive-output-directory*
+                             finished-agents))
+      (doseq [s (:since-date options)]
+        (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
+                                        finished-agents)]
             (build-feed-archive!
-             (str *archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
-                  "-to-" (inst->rfc3339-day (now))) *archive-output-directory*
+             (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
+                  "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
                   new-enough-agents)))
-        (when (:run-server options)
-          (binding [web/*example* "bound by core"]
-            (web/start-web-server!  #_(*web-server-port*))
-            (loop []
-              (Thread/sleep 1000)
-              ;;(info "Web server still running")
-              (recur))))))))
+      (when (:run-server options)
+        (web/start-web-server!  #_(*web-server-port*))
+        (loop []
+          (Thread/sleep 1000)
+          ;;(info "Web server still running")
+          (recur))))))
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)

@@ -5,6 +5,8 @@
   (:require [gtfs-feed-archive.download-agent :as download-agent])
   (:use gtfs-feed-archive.util
         clojure.test
+        [gtfs-feed-archive.config :as config]
+
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
@@ -21,10 +23,10 @@
     most-recent))
 
 (defn list->cache [lst]
-  (agent
+  ;;(agent
    (into []
          (for [a lst]
-           (agent a)))))
+           (agent a)))) ;;)
 
 (defn cache->edn [cache]
   (prn-str (cache->list cache)))
@@ -32,7 +34,7 @@
 (defn edn->cache [str]
   (list->cache (edn/read-string str)))
 
-(defn save-cache!
+(defn write-cache!
   "Save all completed agents to an EDN file.
    Returns true if we could save the cache, false if there was a problem."
   [cache file-name]
@@ -45,7 +47,7 @@
     (catch Exception e
       false)))
 
-(defn load-cache!
+(defn read-cache
   "Return a cache, or nil if there was a problem."
   [file-name]
   (try 

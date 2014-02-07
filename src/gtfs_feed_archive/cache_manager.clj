@@ -6,6 +6,8 @@
             [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:use gtfs-feed-archive.util
         clojure.test
+        [gtfs-feed-archive.config :as config]
+
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
@@ -63,14 +65,15 @@
 ;;      happen if we accidentally started more than one copy of the
 ;;      application.
 
-(def ^:dynamic *cache-directory* "/tmp/gtfs-feed-archive-cache")
+;; (def ^:dynamic *cache-directory* "/tmp/gtfs-feed-archive-cache")
 
-(defn set-cache-directory! [dir]
-  (def ^:dynamic *cache-directory* dir))
+;;(defn set-cache-directory! [dir]
+;;  ;;(reset! config/*cache-directory
+;;  (def ^:dynamic *cache-directory* dir))
 
-(defn cache-directory [] *cache-directory*)
+(defn cache-directory [] @config/*cache-directory*)
 
-(defn cache-file [] (str *cache-directory* "/cache.edn"))
+(defn cache-file [] (str (cache-directory) "/cache.edn"))
 (defn cache-file-backup [] (str (cache-file) ".1"))
 
 ;;(def +cache-file+ "/tmp/gtfs-cache/cache.edn")
@@ -81,18 +84,29 @@
 (defn load-cache-manager! "Load a new cache mananger from disk, if possible."
   []
   ;; TODO: verify that all files referenced in the cache exist.
-  (def cache-manager
-    (or (cache-persistance/load-cache! (cache-file))
-        (agent []))))
+;  (def cache-manager
+  (let [cache-contents (or (cache-persistance/read-cache (cache-file))
+                           (vector))]
+    (if (agent-error config/*cache-manager*)
+      (restart-agent  config/*cache-manager* cache-contents)
+      (send-off   config/*cache-manager* (fn [_] cache-contents)))))
+;;    (or (cache-persistance/read-cache (cache-file))
+;;        (agent []))))
 
 (defn save-cache-manager! []
   (.renameTo (clojure.java.io/file (cache-file)) 
              (clojure.java.io/file (cache-file-backup)))
-  (cache-persistance/save-cache! cache-manager (cache-file)))
+  (cache-persistance/write-cache! cache-manager (cache-file)))
 
 ;;; for debugging
 (defn !reset-cache-manager! []
-  (def cache-manager (agent [])))
+  ;; there's certainly a race condition here. this function should
+  ;; only be used when debugging or testing.
+  (if (agent-error config/*cache-manager*)
+    (restart-agent config/*cache-manager* [])
+    (send-off config/*cache-manager* (fn [_] []))))
+  ;;  (def cache-manager (agent [])))
+
 
 (defn cache-has-a-fresh-enough-copy?  [feed-name modified-date]
   ;; If the modified-date is newer than the file in the cache, but by less
