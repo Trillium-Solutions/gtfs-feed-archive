@@ -24,43 +24,6 @@
 
 (javadoc-helper/set-local-documentation-source!)
 
-;; convenience function. long term we want to manage the input CSV
-;; file(s) using a user setting for which URL to grab the CSV file from.
-(defn public-gtfs-feeds [] 
-  (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"]
-    (read-csv-file public-feeds)))
-
-(defn build-feed-archive! 
-  "Given an archive name, and a successful download agents, create an
-  archive in the output directory."
-  [archive-name output-directory finished-agents]
-  (let [output-file-name (str output-directory "/" archive-name ".zip")]
-    (try (mkdir-p (dirname output-file-name))
-         (info "Creating zip file:" output-file-name)
-         (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
-                               (download-agents->zip-file-list finished-agents))
-               file-list-with-prefix (prepend-path-to-file-list archive-name
-                                                                file-list)]
-           (make-zip-file output-file-name file-list-with-prefix))
-         (catch Exception e
-           ;; TODO: log and/or show error to user.
-           (error "Error while building a feed archive:" (str e))))))
-
-(defn build-public-feed-archive!
-  "Write a zip file with the most recent data for Oregon public GTFS feeds."
-  []
-  (io! "Creates a file."
-       (let [feeds (public-gtfs-feeds)
-             ;;names (feed-names feeds)
-             archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
-             output-directory "/tmp/gtfs-archive-output"]
-         (let [finished-agents (cache-manager/fetch-feeds-slow! feeds)]
-  ;;       (let [finished-agents (cache-manager/fetch-feeds! feeds)]
-           ;; TODO: if there's an error, provide a log and notify the user somehow.
-           (if finished-agents
-             (build-feed-archive! archive-name output-directory finished-agents)
-             (error "Error fetching public GTFS feeds."))))))
-
 (comment 
   (def ^:dynamic *archive-output-directory*)
   (def ^:dynamic *archive-filename-prefix*)
@@ -94,8 +57,7 @@
     (info "*nrepl-server*: " config/*nrepl-server* )
     
     (cache-manager/load-cache-manager!)
-    (let [
-          finished-agents 
+    (let [finished-agents 
           (try 
             (if (:update options)
               (archive-creator/update-cache!)
@@ -103,29 +65,36 @@
             (catch Exception e nil))]
 
       (info "Looked at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
+
       (when-not finished-agents
-          (error "Error updating feeds, sorry!")
-          (System/exit 1))
+        ;; provide a more descriptive error message. we should really re-think how to handle & show
+        ;; errors, and provide guidance to the user on how errors might be resolved.
+        (error "Error updating feeds, sorry!")
+        (System/exit 1))
+
       (do 
         (cache-manager/save-cache-manager!) ;; save cache status for next time.
         (info "Cache saved."))
       (when (:all options)
-        (build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
-                             @config/*archive-output-directory*
-                             finished-agents))
+        (archive-creator/build-archive-of-all-feeds!)
+        ;;(build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
+        ;;                     @config/*archive-output-directory*
+        ;;                     finished-agents))
       (doseq [s (:since-date options)]
-        (let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
-                                        finished-agents)]
-            (build-feed-archive!
-             (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
-                  "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
-                  new-enough-agents)))
+        (archive-creator/build-archive-of-feeds-modified-since! s))
+        ;(let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
+        ;                                finished-agents)]
+        ;    (build-feed-archive!
+        ;     (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
+        ;          "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
+        ;          new-enough-agents)))
+
       (when (:run-server options)
         (web/start-web-server!  #_(*web-server-port*))
         (loop []
           (Thread/sleep 1000)
           ;;(info "Web server still running")
-          (recur))))))
+          (recur)))))))
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)

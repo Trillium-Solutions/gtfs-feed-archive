@@ -25,12 +25,82 @@
   (into #{} (mapcat read-csv-file @config/*input-csv-files*)))
 
 (defn update-cache! []
+  ;; return a list of agents, or if the cache could not be updated,
+  ;; throw an error.
   (cache-manager/fetch-feeds-slow!
    (unique-feeds)))
 
+
 (defn verify-cache-freshness! []
+  ;; return a list of agents, or if the cache is not fresh enough,
+  ;; throw an error.
   (cache-manager/verify-feeds-are-fresh! (unique-feeds)
                                          (java.util.Date.
                                           (- (.getTime (now))
                                              (int (* 1000 60 60
                                                      @config/*freshness-hours*))))))
+
+
+;; convenience function. long term we want to manage the input CSV
+;; file(s) using a user setting for which URL to grab the CSV file from.
+(defn public-gtfs-feeds [] 
+  (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"]
+    (read-csv-file public-feeds)))
+
+(defn build-feed-archive! 
+  "Given an archive name, and a successful download agents, create an
+  archive in the output directory."
+  [archive-name output-directory finished-agents]
+  (let [output-file-name (str output-directory "/" archive-name ".zip")]
+    (try (mkdir-p (dirname output-file-name))
+         (info "Creating zip file:" output-file-name)
+         (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
+                               (download-agents->zip-file-list finished-agents))
+               file-list-with-prefix (prepend-path-to-file-list archive-name
+                                                                file-list)]
+           (make-zip-file output-file-name file-list-with-prefix))
+         (catch Exception e
+           ;; TODO: log and/or show error to user.
+           (error "Error while building a feed archive:" (str e))))))
+
+(defn build-public-feed-archive!
+  "Write a zip file with the most recent data for Oregon public GTFS feeds."
+  []
+  (io! "Creates a file."
+       (let [feeds (public-gtfs-feeds)
+             ;;names (feed-names feeds)
+             archive-name (str "Oregon-GTFS-feeds-" (inst->rfc3339-day (now)))
+             output-directory "/tmp/gtfs-archive-output"]
+         (let [finished-agents (cache-manager/fetch-feeds-slow! feeds)]
+  ;;       (let [finished-agents (cache-manager/fetch-feeds! feeds)]
+           ;; TODO: if there's an error, provide a log and notify the user somehow.
+           (if finished-agents
+             (build-feed-archive! archive-name output-directory finished-agents)
+             (error "Error fetching public GTFS feeds."))))))
+
+
+
+(defn build-archive-of-all-feeds! []
+  (try
+    (let [finished-agents (verify-cache-freshness!)]
+      (build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
+                           @config/*archive-output-directory*
+                           finished-agents))
+    (catch Exception e
+            (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+            (error "This is usually due to a download problem or a typo in the download URL.")
+            (error "Sorry, I am unable to build and archive."))))
+
+(defn build-archive-of-feeds-modified-since! [since-date]
+  (try
+    (let [finished-agents (verify-cache-freshness!)
+          new-enough-agents (filter (fn [a] (download-agent/modified-after? since-date @a))
+                                    finished-agents)]
+      (build-feed-archive!
+       (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
+            "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
+            new-enough-agents))
+    (catch Exception e
+            (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+            (error "This is usually due to a download problem or a typo in the download URL.")
+            (error "Sorry, I am unable to build and archive."))))
