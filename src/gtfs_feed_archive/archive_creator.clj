@@ -83,8 +83,8 @@
 (defn all-feeds-filename []
   (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now)) ".zip" ))
 
-(defn build-archive-of-all-feeds!
-  ([] (build-archive-of-all-feeds! (all-feeds-filename)))
+(defn build-archive-of-all-feeds-worker!
+  ([] (build-archive-of-all-feeds-worker! (all-feeds-filename)))
   ([filename]
      (try
        (let [finished-agents (verify-cache-freshness!)]
@@ -97,6 +97,22 @@
          (error "This is usually due to a download problem or a typo in the download URL.")
          (error "Sorry, I am unable to build an archive.")
          false))))
+
+;; to use:  (send-off config/*archive-list* build-archive archive-builder-function args...)
+(defn build-archive-of-all-feeds!
+  ([] (build-archive-of-all-feeds! (all-feeds-filename)))
+  ([filename] 
+     (send-off config/*archive-list*
+               (fn [archives]
+                 (let [status (get archives filename)]
+                   (if (= status :complete) archives ;; don't need to do anything
+                         (assoc archives filename :running)))))
+     (send-off config/*archive-list*
+               (fn [archives]
+                 (let [status (get archives filename)]
+                   (if (= status :complete) archives ;; don't need to do anything
+                         (do (Thread/sleep 10000)
+                             (assoc archives filename :complete)) ))))))
 
 (defn modified-since-filename [since-date]
   (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
@@ -119,3 +135,4 @@
          (error "This is usually due to a download problem or a typo in the download URL.")
          (error "Sorry, I am unable to build an archive.")
          false))))
+

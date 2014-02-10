@@ -7,6 +7,11 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
+(comment *archive-list* format is
+           [["archive-name1.zip" :complete]
+            ["archive-name2.zip" :running ]
+            ["archive-name3.zip" :error]])
+(defonce ^:dynamic *archive-list* (agent {}))
 (defonce ^:dynamic *archive-output-directory* (atom nil))
 (defonce ^:dynamic *archive-filename-prefix* (atom nil))
 ;; Remembering CSV files, instead of the feeds they represent, has the
@@ -19,3 +24,5 @@
 (defonce ^:dynamic *web-server-port* (atom nil))
 (defonce ^:dynamic *nrepl-server* (atom nil))
 (defonce ^:dynamic *nrepl-port* (atom nil))
+
+
