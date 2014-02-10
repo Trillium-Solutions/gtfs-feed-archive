@@ -12,6 +12,7 @@
             [gtfs-feed-archive.cache-manager :as cache-manager]
             [gtfs-feed-archive.download-agent :as download-agent]
             [gtfs-feed-archive.config :as config]
+            [gtfs-feed-archive.archive-creator :as archive-creator]
             [gtfs-feed-archive.command-line :as command-line])
   (:use compojure.core
         [hiccup.core :only [h html]]
@@ -47,6 +48,23 @@
   ;; to test: curl -v -v http://127.0.0.1:8081/status
   ;; most browsers won't show the message, they disconnect as soon as they recieve the header.
   (with-status 204 "Try back later.")) 
+
+(defhtml archive-generator-page [submit which-feeds year month day]
+  [:head [:title "GTFS Feed Archive."]]
+  [:body
+   [:h1 "GTFS Feed Archive."]
+   [:p "Button Value: " (h submit) ]
+   [:p "Which Feeds: " (h (pr-str which-feeds))] 
+   [:p "Date: " (map (comp h str) [year "-" month "-" day])]
+   (let [all-feeds? (= which-feeds "all")
+         year (or year "2013")
+         month (or month "01")
+         day (or day "15")]
+     (form-to [:post ""] ;; current URL.
+              [:p [:label "All Feeds" (radio-button "which-feeds" all-feeds? "all")]]
+              [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
+               "Date: " (date-selector year month day)]
+              (submit-button {:name "submit"} "Create Archive")))])
 
 (defhtml forms-page [a b year month day]
   [:head [:title "Forms demonstration."]]
@@ -84,6 +102,10 @@
                [:h1 "Hello There!"]
                [:p (link-to "/f" "Forms demo." )]
                [:p (link-to "/g/path-text" "Parameter demo." )]))
+  (POST "/a" [submit which-feeds year month day]
+    (archive-generator-page submit which-feeds year month day))
+  (GET "/a" [submit which-feeds year month day]
+    (archive-generator-page submit which-feeds year month day))
   (POST "/f" [a b year month day]
     (forms-page a b year month day))
   (GET "/f" [a b year month day]

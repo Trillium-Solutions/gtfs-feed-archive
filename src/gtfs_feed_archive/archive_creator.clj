@@ -51,7 +51,7 @@
   "Given an archive name, and a successful download agents, create an
   archive in the output directory."
   [archive-name output-directory finished-agents]
-  (let [output-file-name (str output-directory "/" archive-name ".zip")]
+  (let [output-file-name (str output-directory "/" archive-name )]
     (try (mkdir-p (dirname output-file-name))
          (info "Creating zip file:" output-file-name)
          (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
@@ -78,29 +78,44 @@
              (build-feed-archive! archive-name output-directory finished-agents)
              (error "Error fetching public GTFS feeds."))))))
 
+;; how can the web interface determine if archive generation succeeded or failed?
 
+(defn all-feeds-filename []
+  (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now)) ".zip" ))
 
-(defn build-archive-of-all-feeds! []
-  (try
-    (let [finished-agents (verify-cache-freshness!)]
-      (build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
-                           @config/*archive-output-directory*
-                           finished-agents))
-    (catch Exception e
-            (error "The cache does not contain new enough copies of the GTFS feeds requested.")
-            (error "This is usually due to a download problem or a typo in the download URL.")
-            (error "Sorry, I am unable to build and archive."))))
+(defn build-archive-of-all-feeds!
+  ([] (build-archive-of-all-feeds! (all-feeds-filename)))
+  ([filename]
+     (try
+       (let [finished-agents (verify-cache-freshness!)]
+         (build-feed-archive! filename 
+                              @config/*archive-output-directory*
+                              finished-agents)
+         true)
+       (catch Exception e
+         (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+         (error "This is usually due to a download problem or a typo in the download URL.")
+         (error "Sorry, I am unable to build an archive.")
+         false))))
 
-(defn build-archive-of-feeds-modified-since! [since-date]
-  (try
-    (let [finished-agents (verify-cache-freshness!)
-          new-enough-agents (filter (fn [a] (download-agent/modified-after? since-date @a))
-                                    finished-agents)]
-      (build-feed-archive!
-       (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
-            "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
-            new-enough-agents))
-    (catch Exception e
-            (error "The cache does not contain new enough copies of the GTFS feeds requested.")
-            (error "This is usually due to a download problem or a typo in the download URL.")
-            (error "Sorry, I am unable to build and archive."))))
+(defn modified-since-filename [since-date]
+  (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
+            "-to-" (inst->rfc3339-day (now)) ".zip"))
+
+(defn build-archive-of-feeds-modified-since!
+  ([since-date]
+     (build-archive-of-feeds-modified-since! since-date (modified-since-filename)))
+  ([since-date filename]
+     (try
+       (let [finished-agents (verify-cache-freshness!)
+             new-enough-agents (filter (fn [a] (download-agent/modified-after? since-date @a))
+                                       finished-agents)]
+         (build-feed-archive! filename
+                              @config/*archive-output-directory*
+                              new-enough-agents)
+         true)
+       (catch Exception e
+         (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+         (error "This is usually due to a download problem or a typo in the download URL.")
+         (error "Sorry, I am unable to build an archive.")
+         false))))

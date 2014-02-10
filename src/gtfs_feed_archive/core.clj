@@ -24,22 +24,7 @@
 
 (javadoc-helper/set-local-documentation-source!)
 
-(comment 
-  (def ^:dynamic *archive-output-directory*)
-  (def ^:dynamic *archive-filename-prefix*)
-  ;; Remembering CSV files, instead of the feeds they represent, has the
-  ;; feature of allwing the user to update CSV files between runs.
-  (def ^:dynamic *input-csv-files*)  ;; (def ^:dynamic *feeds*)
-  (def ^:dynamic *cache-directory*) 
-  ;; TODO -- change cache-manager.clj to use this instead of global definition.
-  (def ^:dynamic *cache-manager*)
-  (def ^:dynamic *freshness-hours*)
-  (def ^:dynamic *nrepl-server* (atom nil)))
-
 (defn run-command-line [& args]
-  ;; TODO: split out all these option handlers into their own
-  ;; functions, so we can call them as easily from the web interface
-  ;; as from the command line.
   (let [[options plain-args] (apply command-line/parse-args-or-die! args)]
     (reset! config/*archive-output-directory* (:output-directory options))
     (reset! config/*archive-filename-prefix* (:archive-name-prefix options))
@@ -49,55 +34,52 @@
     (reset! config/*web-server-port* (:server-port options))
     (reset! config/*nrepl-port* (:nrepl-port options))
 
-    (info "Setting cache directory:" @config/*cache-directory*)
-    (info "nrepl-port: " @config/*nrepl-port*)
+    (info "Cache directory:" @config/*cache-directory*)
+    (info "Output directory:" @config/*archive-output-directory*)
     (when-let [p @config/*nrepl-port*]
+      (info "nREPL port: " @config/*nrepl-port*)
       (reset! config/*nrepl-server* 
-              (nrepl-server/start-server :bind "127.0.0.1" :port p)))
-    (info "*nrepl-server*: " config/*nrepl-server* )
+              (nrepl-server/start-server :bind "127.0.0.1" :port p))
+      (info "*nrepl-server*: " config/*nrepl-server* ))
     
     (cache-manager/load-cache-manager!)
-    (let [finished-agents 
-          (try 
-            (if (:update options)
-              (archive-creator/update-cache!)
-              (archive-creator/verify-cache-freshness!))
-            (catch Exception e nil))]
-
-      (info "Looked at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
-
-      (when-not finished-agents
-        ;; provide a more descriptive error message. we should really re-think how to handle & show
-        ;; errors, and provide guidance to the user on how errors might be resolved.
-        (error "Error updating feeds, sorry!")
-        (System/exit 1))
-
-      (do 
-        (cache-manager/save-cache-manager!) ;; save cache status for next time.
-        (info "Cache saved."))
-      (when (:all options)
-        (archive-creator/build-archive-of-all-feeds!)
-        ;;(build-feed-archive! (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now))) 
-        ;;                     @config/*archive-output-directory*
-        ;;                     finished-agents))
-      (doseq [s (:since-date options)]
-        (archive-creator/build-archive-of-feeds-modified-since! s))
-        ;(let [new-enough-agents (filter (fn [a] (download-agent/modified-after? s @a))
-        ;                                finished-agents)]
-        ;    (build-feed-archive!
-        ;     (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day s)
-        ;          "-to-" (inst->rfc3339-day (now))) @config/*archive-output-directory*
-        ;          new-enough-agents)))
-
-      (when (:run-server options)
-        (web/start-web-server!  #_(*web-server-port*))
-        (loop []
-          (Thread/sleep 1000)
-          ;;(info "Web server still running")
-          (recur)))))))
+    (info "Looking at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
+      
+    (when (:update options)
+      ;; fetch new copies of GTFS feeds, if possible.
+      (archive-creator/update-cache!)
+      (info "Cache updated.")
+      ;; save cache status for next time.
+      (cache-manager/save-cache-manager!) 
+      (info "Cache saved."))
+      
+    ;; TODO: how do we inform the exit code of the program when we run it
+    ;; as a script?  I think the best way is to perform as many operations
+    ;; as possible, but return an error code, and print a message such as
+    ;; "Not all operations succeeded, please see log for details."
+    
+    (when (:all options)
+      (archive-creator/build-archive-of-all-feeds!))
+    
+    (doseq [s (:since-date options)]
+      (archive-creator/build-archive-of-feeds-modified-since! s))
+    
+    (when (:run-server options)
+      (web/start-web-server!)
+      ;; If the web server is running in the background, shouldn't we just let it keep going?
+      ;; We can have commands that access its nREPL port which can print out status, 
+      ;; shutdown/restart the server etc. Trick would be to do all of the Unix daemon things like
+      ;; change to the root directory, close open fd's etc. Without messing up the I/O to things like
+      ;; the cache directory which might be specified as a relative path.
+      (loop []
+        (Thread/sleep 1000)
+        ;;(info "Web server still running")
+        (recur)))))
 
 (defn -main [& args]
   ;;(timbre/set-level! :warn)
   (apply run-command-line args)
+  ;; Hmm, are we sure we want to shutdown agents? I think only if we're not running a web server!
+  ;; Since download agents trigger their own successor send-off commands, by shutting agents down,
+  ;; we essentially kill any running downloads, and of course prevent any new ones from starting.
   (shutdown-agents))
-
