@@ -104,7 +104,7 @@
 
 (defn build-archive-of-feeds-modified-since!
   ([since-date]
-     (build-archive-of-feeds-modified-since! since-date (modified-since-filename)))
+     (build-archive-of-feeds-modified-since! since-date (modified-since-filename since-date)))
   ([since-date filename]
      (try
        (let [finished-agents (verify-cache-freshness!)
