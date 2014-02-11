@@ -46,13 +46,27 @@
   ;; most browsers won't show the message, they disconnect as soon as they recieve the header.
   (with-status 204 "Try back later.")) 
 
+(defn parse-date [arg]
+  (let [d (clj-time.format/parse-local (clj-time.format/formatters :date) arg)]
+    (.toDate d)))
+
 (defhtml archive-generator-page [submit which-feeds year month day]
-  [:head [:title "GTFS Feed Archive."]]
+  [:head [:title "GTFS Feed Archive"]]
   [:body
-   [:h1 "GTFS Feed Archive."]
+   [:h2 "What kind of archive would you like to create?"]
+   "<!-- "
    [:p "Button Value: " (h submit) ]
    [:p "Which Feeds: " (h (pr-str which-feeds))] 
    [:p "Date: " (map (comp h str) [year "-" month "-" day])]
+   "-->"
+   (when (= which-feeds "all")
+     (archive-creator/build-archive-of-all-feeds!))
+   (when (= which-feeds "since-date")
+     (try (let [date (parse-date (str year "-" month "-" day))]
+            (info "I was told to build an archive of feeds modified since")
+            (info "date is " date)
+            (archive-creator/build-archive-of-feeds-modified-since! date))
+          (catch Exception e nil)))
    (let [all-feeds? (= which-feeds "all")
          year (or year "2013")
          month (or month "01")
@@ -61,7 +75,9 @@
               [:p [:label "All Feeds" (radio-button "which-feeds" all-feeds? "all")]]
               [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
                "Date: " (date-selector year month day)]
-              (submit-button {:name "submit"} "Create Archive")))])
+              (submit-button {:name "submit"} "Create Archive")))
+   [:p "Archives created here may be found on the "
+    (link-to "http://archive.oregon-gtfs.com/archive-download-public/" "download page")]])
 
 (defhtml forms-page [a b year month day]
   [:head [:title "Forms demonstration."]]
@@ -84,15 +100,18 @@
    [:p "*out*: " (h *out*)]
    [:p "input csv " (h @config/*input-csv-files*)]
    [:p "cache dir " (h @config/*cache-directory*)]
+   (let [al (sort @config/*archive-list*)]
+     [:p "archive list holds "  (count al) " entries:"
+      [:ol 
+      (for [a al]
+        [:li (h a) ] )
+      ]])
    (let [cm @config/*cache-manager*]
      [:p "cache manager holds "  (count cm) " entries:"
       [:ol 
-      (for [a @config/*cache-manager*]
+      (for [a cm]
         [:li (h @a) ] )
-      ]])
-   ;; (h @config/*cache-manager*)]
-   ;;[:p "*input-csv-files*: " (h gtfs-feed-archive.core/*input-csv-files*)]
-   ])
+      ]])])
 
 (defroutes app
   (GET "/" [] (html
