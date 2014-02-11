@@ -32,6 +32,7 @@
     (reset! config/*cache-directory* (:cache-directory options))
     (reset! config/*freshness-hours* (:freshness-hours options))
     (reset! config/*web-server-port* (:server-port options))
+    (reset! config/*archive-output-url* (:download-url options))
     (reset! config/*nrepl-port* (:nrepl-port options))
 
     (info "Cache directory:" @config/*cache-directory*)
@@ -45,7 +46,7 @@
     (cache-manager/load-cache-manager!)
     (archive-creator/load-archive-list!)
     (info "Looking at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
-      
+
     (when (:update options)
       ;; fetch new copies of GTFS feeds, if possible.
       (archive-creator/update-cache!)

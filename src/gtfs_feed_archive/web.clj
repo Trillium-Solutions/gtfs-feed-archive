@@ -77,7 +77,7 @@
                "Date: " (date-selector year month day)]
               (submit-button {:name "submit"} "Create Archive")))
    [:p "Archives created here may be found on the "
-    (link-to "http://archive.oregon-gtfs.com/archive-download-public/" "download page")]])
+    (link-to @config/*archive-output-url* "download page")]])
 
 (defhtml forms-page [a b year month day]
   [:head [:title "Forms demonstration."]]

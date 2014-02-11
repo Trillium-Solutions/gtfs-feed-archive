@@ -36,6 +36,10 @@
               :parse-fn #(Integer/parseInt %)
               :validate [#(< 1 % 65535)
                          "Please use a port between 1 and 65535."]]
+             ["-D" "--download-url"
+              "What is the public URL for downloading archives?"
+              ;; if none, we default to the URL of the built-in web server.
+              :default nil]
              ["-f" "--freshness-hours"
               "How many hours old can a cache item be, and still be considered fresh?"
               :default 24.0 ;; default to within the last day.
