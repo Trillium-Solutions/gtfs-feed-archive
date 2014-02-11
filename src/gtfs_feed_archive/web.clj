@@ -75,8 +75,6 @@
                [:p "Archive is available at " (link-to url filename)]])
             (catch Exception e nil)))
      [:p  (link-to "archive-creator" "Return here") " to build another archive."]
-     (when archive-cr)
-
      (comment [:p "All generated archives may be found on the "
                (link-to @config/*archive-output-url* "download page")]) ]))
 
