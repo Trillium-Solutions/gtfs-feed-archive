@@ -53,19 +53,24 @@
 (defhtml archive-generator-page [submit which-feeds year month day]
   [:head [:title "GTFS Feed Archive"]]
   [:body
-   [:h2 "What kind of archive would you like to create?"]
+   [:h2 "Which feeds would you like to include in the archive?"]
    "<!-- "
    [:p "Button Value: " (h submit) ]
    [:p "Which Feeds: " (h (pr-str which-feeds))] 
    [:p "Date: " (map (comp h str) [year "-" month "-" day])]
    "-->"
+   ;; TODO: provide a link directly to the archive they just built.
+   ;; Do this by calling archive-creator/modified-since-filename
+   ;; or archive-creator/all-feeds-filename
    (when (= which-feeds "all")
-     (archive-creator/build-archive-of-all-feeds!))
+     (archive-creator/build-archive-of-all-feeds!)
+     nil)
    (when (= which-feeds "since-date")
      (try (let [date (parse-date (str year "-" month "-" day))]
             (info "I was told to build an archive of feeds modified since")
             (info "date is " date)
-            (archive-creator/build-archive-of-feeds-modified-since! date))
+            (archive-creator/build-archive-of-feeds-modified-since! date)
+            nil)
           (catch Exception e nil)))
    (let [all-feeds? (= which-feeds "all")
          year (or year "2013")
@@ -76,7 +81,7 @@
               [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
                "Date: " (date-selector year month day)]
               (submit-button {:name "submit"} "Create Archive")))
-   [:p "Archives created here may be found on the "
+   [:p "Archives may be found on the "
     (link-to @config/*archive-output-url* "download page")]])
 
 (defhtml forms-page [a b year month day]
@@ -113,11 +118,30 @@
         [:li (h @a) ] )
       ]])])
 
+(defhtml update-feeds []
+  [:head [:title "Updating GTFS feeds as we speak."]]
+  [:body
+   [:h2 "Updating GTFS feeds as we speak."]
+   [:p "Check "(link-to "/v" "here") " for a progress report." ]]
+  (do (future (archive-creator/update-cache!)
+              ;; By saving and reloading the cache we purge unnecessary entries.
+              ;; FIXME: is there a race-condition here?? maybe another reason to keep
+              ;; the cache-manager as a ref rather than an agent.
+              (cache-manager/save-cache-manager!)
+              (cache-manager/load-cache-manager!))
+      nil))
+
 (defroutes app
   (GET "/" [] (html
                [:h1 "Hello There!"]
                [:p (link-to "/f" "Forms demo." )]
                [:p (link-to "/g/path-text" "Parameter demo." )]))
+  (GET "/update-feeds" [] ;; update feeds
+    (update-feeds))
+  (POST "/archive-creator" [submit which-feeds year month day]
+    (archive-generator-page submit which-feeds year month day))
+  (GET "/archive-creator" [submit which-feeds year month day]
+    (archive-generator-page submit which-feeds year month day))
   (POST "/a" [submit which-feeds year month day]
     (archive-generator-page submit which-feeds year month day))
   (GET "/a" [submit which-feeds year month day]
