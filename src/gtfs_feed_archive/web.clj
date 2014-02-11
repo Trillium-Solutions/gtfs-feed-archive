@@ -27,9 +27,6 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
-
-(def ^:dynamic *example* "default")
-
 (javadoc-helper/set-local-documentation-source!)
 
 (defhtml date-selector [year month day]

@@ -13,6 +13,8 @@
             ["archive-name3.zip" :error]])
 (defonce ^:dynamic *archive-list* (agent {}))
 (defonce ^:dynamic *archive-output-directory* (atom nil))
+ ;; where on the web does the output directory appear?
+(defonce ^:dynamic *archive-output-url* (atom nil))
 (defonce ^:dynamic *archive-filename-prefix* (atom nil))
 ;; Remembering CSV files, instead of the feeds they represent, has the
 ;; feature of allowing the user to update CSV files between runs.

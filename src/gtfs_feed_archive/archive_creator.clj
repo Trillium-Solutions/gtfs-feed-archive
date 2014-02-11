@@ -83,56 +83,98 @@
 (defn all-feeds-filename []
   (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now)) ".zip" ))
 
+(defn update-archive-list! [filename worker-thunk] 
+  ;; FIXME. :running status seems like it could cause problems if for
+  ;; instance two updates are started simultaneously then one updates.
+  ;; The caller should find there own way to keep track of which
+  ;; operations they have started, and then set a watch on
+  ;; config/*archive-list* so they can check when things have
+  ;; completed.
+  (send-off config/*archive-list*
+            (fn [archives]
+              (let [status (get archives filename)]
+                (if (= status :complete)
+                  archives
+                  (assoc archives filename :running)))))
+  (send-off config/*archive-list*
+            (fn [archives]
+              (let [status (get archives filename)]
+                (if (= status :complete)
+                  (do (info "No work to be done," filename "already created successfully.")
+                      archives)
+                  (if (worker-thunk)
+                    (assoc archives filename :complete)
+                    (assoc archives filename :error)))))))
+
+;; for debugging. clear the list so we can test adding items to it.
+(defn !empty-archive-list! []
+  (send-off config/*archive-list* (fn [a] {})))
+
+(defn load-archive-list! []
+  (let [archive-list-from-disk
+        (->> (try (file-seq (clojure.java.io/file @config/*archive-output-directory* ))
+                  (catch Exception e nil))
+             (filter #(.isFile %)) ;; TODO -- verify the zip is properly formatted!!
+             (map #(.getName %))
+             (filter #(.endsWith (.toLowerCase %) ".zip"))
+             (map (fn [name] [name :complete]))
+             (into {}))]
+    (send config/*archive-list*
+          (fn [existing-archive-list]
+            (merge existing-archive-list archive-list-from-disk)))
+    ;; TODO is this await needed?
+    (await config/*archive-list*)))
+
+
 (defn build-archive-of-all-feeds-worker!
-  ([] (build-archive-of-all-feeds-worker! (all-feeds-filename)))
-  ([filename]
-     (try
-       (let [finished-agents (verify-cache-freshness!)]
-         (build-feed-archive! filename 
-                              @config/*archive-output-directory*
-                              finished-agents)
-         true)
-       (catch Exception e
-         (error "The cache does not contain new enough copies of the GTFS feeds requested.")
-         (error "This is usually due to a download problem or a typo in the download URL.")
-         (error "Sorry, I am unable to build an archive.")
-         false))))
+  [filename]
+  (try
+    (let [finished-agents (verify-cache-freshness!)]
+      (build-feed-archive! filename 
+                           @config/*archive-output-directory*
+                           finished-agents)
+      true)
+    (catch Exception e
+      (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+      (error "This is usually due to a download problem or a typo in the download URL.")
+      (error "Sorry, I am unable to build an archive.")
+      false)))
+
 
 ;; to use:  (send-off config/*archive-list* build-archive archive-builder-function args...)
 (defn build-archive-of-all-feeds!
-  ([] (build-archive-of-all-feeds! (all-feeds-filename)))
+  ([]
+     (build-archive-of-all-feeds! (all-feeds-filename)))
   ([filename] 
-     (send-off config/*archive-list*
-               (fn [archives]
-                 (let [status (get archives filename)]
-                   (if (= status :complete) archives ;; don't need to do anything
-                         (assoc archives filename :running)))))
-     (send-off config/*archive-list*
-               (fn [archives]
-                 (let [status (get archives filename)]
-                   (if (= status :complete) archives ;; don't need to do anything
-                         (do (Thread/sleep 10000)
-                             (assoc archives filename :complete)) ))))))
+     (update-archive-list! filename
+                           (fn []
+                             (build-archive-of-all-feeds-worker! filename)))))
+
 
 (defn modified-since-filename [since-date]
   (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
             "-to-" (inst->rfc3339-day (now)) ".zip"))
 
+(defn build-archive-of-feeds-modified-since-worker!
+  [since-date filename]
+  (try
+    (let [finished-agents (verify-cache-freshness!)
+          new-enough-agents (filter (fn [a] (download-agent/modified-after? since-date @a))
+                                    finished-agents)]
+      (build-feed-archive! filename
+                           @config/*archive-output-directory*
+                           new-enough-agents)
+      true)
+    (catch Exception e
+      (error "The cache does not contain new enough copies of the GTFS feeds requested.")
+      (error "This is usually due to a download problem or a typo in the download URL.")
+      (error "Sorry, I am unable to build an archive.")
+      false)))
+
 (defn build-archive-of-feeds-modified-since!
   ([since-date]
      (build-archive-of-feeds-modified-since! since-date (modified-since-filename since-date)))
-  ([since-date filename]
-     (try
-       (let [finished-agents (verify-cache-freshness!)
-             new-enough-agents (filter (fn [a] (download-agent/modified-after? since-date @a))
-                                       finished-agents)]
-         (build-feed-archive! filename
-                              @config/*archive-output-directory*
-                              new-enough-agents)
-         true)
-       (catch Exception e
-         (error "The cache does not contain new enough copies of the GTFS feeds requested.")
-         (error "This is usually due to a download problem or a typo in the download URL.")
-         (error "Sorry, I am unable to build an archive.")
-         false))))
-
+  ([since-date filename] 
+     (update-archive-list! filename
+                           (fn []
+                             (build-archive-of-feeds-modified-since-worker! since-date filename)))))
