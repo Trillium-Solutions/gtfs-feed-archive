@@ -50,6 +50,36 @@
   (let [d (clj-time.format/parse-local (clj-time.format/formatters :date) arg)]
     (.toDate d)))
 
+(defn archive-filename->download-link [filename]
+  (str @config/*archive-output-url* "/" filename))
+
+(defhtml archive-target-page [submit which-feeds year month day force-rebuild]
+  (binding [archive-creator/*force-rebuild?* (boolean force-rebuild)]
+    [:head [:title "GTFS Feed Archive"]]
+    [:body
+     (when (= which-feeds "all")
+       (let [filename (archive-creator/all-feeds-filename)
+             url  (archive-filename->download-link filename) ]
+         (archive-creator/build-archive-of-all-feeds! filename)
+         (await config/*archive-list*) ;; wait until archive is available.
+         [:div [:h2 "Archive of all feeds created."]
+          [:p "Download is available at " (link-to url filename)] ] ))
+     (when (= which-feeds "since-date")
+       (try (let [date (parse-date (str year "-" month "-" day))
+                  filename (archive-creator/modified-since-filename date)
+                  url (archive-filename->download-link filename) ]
+              (info "I was asked to build an archive of feeds modified since" date)
+              (archive-creator/build-archive-of-feeds-modified-since! date filename)
+              (await config/*archive-list*) ;; wait until archive is available.
+              [:div [:h2 "Archive of feeds modified since " date " created."]
+               [:p "Archive is available at " (link-to url filename)]])
+            (catch Exception e nil)))
+     [:p  (link-to "archive-creator" "Return here") " to build another archive."]
+     (when archive-cr)
+
+     (comment [:p "All generated archives may be found on the "
+               (link-to @config/*archive-output-url* "download page")]) ]))
+
 (defhtml archive-generator-page [submit which-feeds year month day]
   [:head [:title "GTFS Feed Archive"]]
   [:body
@@ -59,44 +89,18 @@
    [:p "Which Feeds: " (h (pr-str which-feeds))] 
    [:p "Date: " (map (comp h str) [year "-" month "-" day])]
    "-->"
-   ;; TODO: provide a link directly to the archive they just built.
-   ;; Do this by calling archive-creator/modified-since-filename
-   ;; or archive-creator/all-feeds-filename
-   (when (= which-feeds "all")
-     (archive-creator/build-archive-of-all-feeds!)
-     nil)
-   (when (= which-feeds "since-date")
-     (try (let [date (parse-date (str year "-" month "-" day))]
-            (info "I was told to build an archive of feeds modified since")
-            (info "date is " date)
-            (archive-creator/build-archive-of-feeds-modified-since! date)
-            nil)
-          (catch Exception e nil)))
    (let [all-feeds? (= which-feeds "all")
          year (or year "2013")
          month (or month "01")
          day (or day "15")]
-     (form-to [:post ""] ;; current URL.
+     (form-to [:post "archive-target"] 
               [:p [:label "All Feeds" (radio-button "which-feeds" all-feeds? "all")]]
               [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
                "Date: " (date-selector year month day)]
+              [:p [:label "Force archive rebuild" (check-box "force-rebuild" false)]]
               (submit-button {:name "submit"} "Create Archive")))
-   [:p "Archives may be found on the "
-    (link-to @config/*archive-output-url* "download page")]])
-
-(defhtml forms-page [a b year month day]
-  [:head [:title "Forms demonstration."]]
-  [:body
-   [:h1 "Forms Demonstration"]
-   (let [year (or year "2013")
-         month (or month "01")
-         day (or day "15")]
-     (form-to [:post ""] ;; current URL.
-              [:p [:label "A" (check-box "a" a)] "value: " (h (pr-str a))]
-              [:p [:label "B" (check-box "b" b)] "value: " (h (pr-str b))]
-              [:p "Date: " (date-selector year month day)
-               "value: " (map (comp h str) [year "-" month "-" day])]
-              (submit-button {:name "submit"} "Submit!")))])
+   [:p "All previously generated archives may be found on the "
+             (link-to @config/*archive-output-url* "download page") "."]])
 
 (defhtml variables-demo []
   [:head [:title "Variables Demonstration."]]
@@ -111,11 +115,11 @@
       (for [a al]
         [:li (h a) ] )
       ]])
-   (let [cm @config/*cache-manager*]
+   (let [cm (sort-by :feed-name  (map deref @config/*cache-manager*)) ]
      [:p "cache manager holds "  (count cm) " entries:"
       [:ol 
       (for [a cm]
-        [:li (h @a) ] )
+        [:li (h a) ] )
       ]])])
 
 (defhtml update-feeds []
@@ -132,32 +136,20 @@
       nil))
 
 (defroutes app
-  (GET "/" [] (html
+  ;; TODO: build a download page which returns 302 for downloads which aren't ready yet?
+  #_(GET "/" [] (html
                [:h1 "Hello There!"]
-               [:p (link-to "/f" "Forms demo." )]
-               [:p (link-to "/g/path-text" "Parameter demo." )]))
+               [:p (link-to "f" "Forms demo." )]
+               [:p (link-to "g/path-text" "Parameter demo." )]))
   (GET "/update-feeds" [] ;; update feeds
     (update-feeds))
+  (POST "/archive-target" [submit which-feeds year month day force-rebuild]
+    (archive-target-page submit which-feeds year month day force-rebuild))
   (POST "/archive-creator" [submit which-feeds year month day]
     (archive-generator-page submit which-feeds year month day))
   (GET "/archive-creator" [submit which-feeds year month day]
     (archive-generator-page submit which-feeds year month day))
-  (POST "/a" [submit which-feeds year month day]
-    (archive-generator-page submit which-feeds year month day))
-  (GET "/a" [submit which-feeds year month day]
-    (archive-generator-page submit which-feeds year month day))
-  (POST "/f" [a b year month day]
-    (forms-page a b year month day))
-  (GET "/f" [a b year month day]
-    (forms-page a b year month day))
   (GET "/status" [] (status-demo))
-  (GET "/g/:a" [a b :as r]
-    (html [:head [:title "Parameter demonstration."]]
-          [:body
-           [:h1 "Parameter demonstration."]
-           [:p "The path after /g/ is " (h a)]
-           [:p "Query-string variable b is " (h b)]
-           [:p "Full request map is " (h r) ]]))
   (GET "/v" []
     (variables-demo))
   (route/not-found (html [:h1 "Page not found"])))

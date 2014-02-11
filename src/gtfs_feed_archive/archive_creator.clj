@@ -12,10 +12,10 @@
         [clojure.pprint :only [pprint]] 
         [clojure.pprint :rename {cl-format format}]))
 
+
 ;; Functions related to updating the cache and creating archives. This
 ;; is a bit of a catch-all, this module may benefit from being split
 ;; or refactored.
-
 
 ;; These functions might belong in the cache manager. On the other
 ;; hand they know about our CSV input files, and the freshness
@@ -40,6 +40,8 @@
                                              (int (* 1000 60 60
                                                      @config/*freshness-hours*))))))
 
+
+(defonce ^:dynamic *force-rebuild?* false)
 
 ;; convenience function. long term we want to manage the input CSV
 ;; file(s) using a user setting for which URL to grab the CSV file from.
@@ -80,31 +82,18 @@
 
 ;; how can the web interface determine if archive generation succeeded or failed?
 
-(defn all-feeds-filename []
-  (str @config/*archive-filename-prefix* "-feeds-" (inst->rfc3339-day (now)) ".zip" ))
-
 (defn update-archive-list! [filename worker-thunk] 
-  ;; FIXME. :running status seems like it could cause problems if for
-  ;; instance two updates are started simultaneously then one updates.
-  ;; The caller should find there own way to keep track of which
-  ;; operations they have started, and then set a watch on
-  ;; config/*archive-list* so they can check when things have
-  ;; completed.
   (send-off config/*archive-list*
             (fn [archives]
               (let [status (get archives filename)]
-                (if (= status :complete)
-                  archives
-                  (assoc archives filename :running)))))
-  (send-off config/*archive-list*
-            (fn [archives]
-              (let [status (get archives filename)]
-                (if (= status :complete)
+                (if (or *force-rebuild?*
+                        (not= status :complete))
+                  (do (info "Building archive " filename ".")
+                      (if (worker-thunk)
+                        (assoc archives filename :complete)
+                        (assoc archives filename :error)))
                   (do (info "No work to be done," filename "already created successfully.")
-                      archives)
-                  (if (worker-thunk)
-                    (assoc archives filename :complete)
-                    (assoc archives filename :error)))))))
+                      archives))))))
 
 ;; for debugging. clear the list so we can test adding items to it.
 (defn !empty-archive-list! []
@@ -125,6 +114,9 @@
     ;; TODO is this await needed?
     (await config/*archive-list*)))
 
+(defn all-feeds-filename []
+  (str @config/*archive-filename-prefix* "-feeds-"
+       (inst->rfc3339-day (now)) ".zip" ))
 
 (defn build-archive-of-all-feeds-worker!
   [filename]
