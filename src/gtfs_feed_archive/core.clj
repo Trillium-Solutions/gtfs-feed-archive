@@ -43,7 +43,7 @@
       (info "*nrepl-server*: " config/*nrepl-server* ))
     
     (cache-manager/load-cache-manager!)
-    (archive-creator/load-archive-list! [] )
+    (archive-creator/load-archive-list!)
     (info "Looking at " (count (into #{} (mapcat read-csv-file @config/*input-csv-files*))) "feeds.")
       
     (when (:update options)
