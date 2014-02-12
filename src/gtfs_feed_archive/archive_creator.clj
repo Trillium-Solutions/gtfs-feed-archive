@@ -49,6 +49,9 @@
   (let [public-feeds "./resources/oregon_public_gtfs_feeds.csv"]
     (read-csv-file public-feeds)))
 
+(defn remove-zip-extension [filename]
+  (clojure.string/replace filename #".zip$" ""))
+
 (defn build-feed-archive! 
   "Given an archive name, and a successful download agents, create an
   archive in the output directory."
@@ -58,8 +61,9 @@
          (info "Creating zip file:" output-file-name)
          (let [file-list (cons (download-agents->last-updates-csv-entry finished-agents)
                                (download-agents->zip-file-list finished-agents))
-               file-list-with-prefix (prepend-path-to-file-list archive-name
-                                                                file-list)]
+               file-list-with-prefix (prepend-path-to-file-list
+                                      (remove-zip-extension archive-name) 
+                                      file-list)]
            (make-zip-file output-file-name file-list-with-prefix))
          (catch Exception e
            ;; TODO: log and/or show error to user.
