@@ -262,7 +262,7 @@
    May throw an exception if agents do not have files or their files are not readable."
   [download-agents]
   (for [a (map deref download-agents) ]
-    [(str "feeds/"(:feed-name a) ".zip")
+    [(str "feeds/" (:feed-name a) "/" (:feed-name a) ".zip")
      (clojure.java.io/input-stream (:file-name a))]))
 
 (defn prepend-path-to-file-list [path zip-file-list]
