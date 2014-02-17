@@ -249,7 +249,7 @@
   (let [header-str "zip_file_name,most_recent_update,feed_name,historical_download_url\r\n"]
     (reduce str header-str
             (for [a (map deref download-agents) ]
-              (str (str "feeds/"(:feed-name a) ".zip,")
+              (str (str "feeds/" (:feed-name a) "/" (:feed-name a) ".zip,")
                    (inst->rfc3339-utc (:last-modified a)) ","
                    (:feed-name a) ","
                    (:url a) "\r\n")))))
