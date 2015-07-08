@@ -228,9 +228,15 @@
     (map (partial zipmap header)
          data)))
 
+(defn- remove-invalid-csv-entries 
+  [csv-maps]
+  ;; remove blank urls, for starters
+  (remove #(clojure.string/blank? (:gtfs-zip-url %)) csv-maps))
+
 (defn read-csv-file [filename]
   (with-open [r (clojure.java.io/reader filename)]
-      (doall (csv->maps r))))
+      (doall (-> (csv->maps r)
+                 (remove-invalid-csv-entries)))))
 
 ;; contents can be a java.io.InputStream, in which case we'll loop and
 ;; copy everything from the stream into the zip file.
