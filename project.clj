@@ -1,4 +1,4 @@
-(defproject gtfs-feed-archive "0.1.8"
+(defproject gtfs-feed-archive "0.1.9"
   :description "GTFS Feed Archive Tool"
   :url "http://github.com/ed-g/gtfs-feed-archive"
   :license {:name "GNU GPL version 3 or newer"

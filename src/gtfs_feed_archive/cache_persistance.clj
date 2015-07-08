@@ -1,6 +1,7 @@
 (ns gtfs-feed-archive.cache-persistance
   (:refer-clojure :exclude [format]) ;; I like cl-format better.
   (:require [clojure.edn :as edn]
+            [clojure.pprint :only [pprint]]
             [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)])
   (:require [gtfs-feed-archive.download-agent :as download-agent])
   (:use gtfs-feed-archive.util
@@ -41,7 +42,7 @@
   (try
     (with-open [f (clojure.java.io/writer file-name)]
       (binding [*out* f]
-        (prn (cache->list cache))
+        (pprint (cache->list cache))
         (.flush *out*)))
     true
     (catch Exception e

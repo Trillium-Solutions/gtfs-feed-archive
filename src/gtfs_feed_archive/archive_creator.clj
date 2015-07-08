@@ -30,7 +30,6 @@
   (cache-manager/fetch-feeds-slow!
    (unique-feeds)))
 
-
 (defn verify-cache-freshness! []
   ;; return a list of agents, or if the cache is not fresh enough,
   ;; throw an error.

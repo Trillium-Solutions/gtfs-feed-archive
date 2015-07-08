@@ -181,6 +181,8 @@
       (let [download-agents (filter agent-we-care-about? @cache)
             any-agents-still-running (some (comp download-agent/still-running? deref)
                                            download-agents )
+            running-agents (filter (comp download-agent/still-running? deref)
+                                   download-agents)
             fresh-completed-agents (filter (comp (partial download-agent/completed-after? freshness-date)
                                                  deref)
                                            download-agents)
@@ -210,6 +212,7 @@
               :else (do (Thread/sleep (* 1000 10)) ; 10 seconds
                         (debug "all feeds OK?" all-feeds-ok)
                         (debug "any agents still running?" any-agents-still-running)
+                        (debug "running agents:" running-agents)
                         (debug "successful agents:" successful-feed-names)
                         (debug "waiting for these agents:" unsuccessful-feed-names)
                         (recur)))))))
