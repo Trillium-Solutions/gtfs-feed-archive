@@ -87,12 +87,13 @@
    [:p "Which Feeds: " (h (pr-str which-feeds))] 
    [:p "Date: " (map (comp h str) [year "-" month "-" day])]
    "-->"
-   (let [all-feeds? (= which-feeds "all")
+   (let [all-feeds? (or (= which-feeds nil)
+                        (= which-feeds "all"))
          year (or year "2013")
          month (or month "01")
          day (or day "15")]
      (form-to [:post "archive-target"] 
-              [:p [:label "All Feeds" (radio-button "which-feeds" all-feeds? "all")]]
+              [:p [:label "All Feeds"            (radio-button "which-feeds" all-feeds? "all")]]
               [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
                "Date: " (date-selector year month day)]
               [:p [:label "Force archive rebuild" (check-box "force-rebuild" false)]]
