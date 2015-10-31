@@ -3,7 +3,10 @@
   (:refer-clojure :exclude [format]) ;; I like cl-format.
   (:require [clj-http.client :as http] ;; docs at https://github.com/dakrone/clj-http
             clojure.set
+            cheshire.core ;; JSON encoder
+            [environ.core :refer [env]] ;; environment variables
             [ring.adapter.jetty :as jetty] 
+            [ring.util.response :as ring-response] 
             [compojure.route :as route]
             [compojure.handler :as handler]
             [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy with-log-level)]
@@ -134,6 +137,33 @@
               (cache-manager/load-cache-manager!))
       nil))
 
+(defn cache-manager-as-json []
+  (cheshire.core/generate-string 
+    (->> config/*cache-manager*
+         deref
+         (map deref))
+    {:pretty true}))
+
+(defn json-ring-response [string-containing-json]
+  (-> (ring-response/response string-containing-json)
+      (ring-response/header "Content-type" "application/json; charset=utf-8")))
+
+(defn gtfs-archive-secret-is-valid?
+  " Look at number-of-secrets-to-look-for environent variables, and see if
+  ``secret'' is one of them. Secrets are given in the environment as
+  GTFS_ARCHIVE_SECRET_0, GTFS_ARCHIVE_SECRET_1, etc.   "
+  [secret]
+  (let [number-of-secrets-to-look-for 50
+        valid-secrets (into #{} 
+                            (remove nil?
+                              (map (fn [i]
+                                     (env (keyword (str "gtfs-archive-secret-" i))))
+                                   (range number-of-secrets-to-look-for))))]
+    ;;(prn valid-secrets) ;; for debugging
+    (if (valid-secrets secret)
+      true
+      false)))
+
 (defroutes app
   ;; TODO: build a download page which returns 302 for downloads which aren't ready yet?
   #_(GET "/" [] (html
@@ -142,6 +172,21 @@
                [:p (link-to "g/path-text" "Parameter demo." )]))
   (GET "/update-feeds" [] ;; update feeds
     (update-feeds))
+
+  (context "/admin-api" [gtfs_archive_secret]
+    ;; These API endpoints are for the GTFS-API Admin Console, or other monitoring systems.
+    ;(GET "/cache-manager" []
+    ;   "Please use POST")
+    (ANY "/cache-manager" []
+        (if (gtfs-archive-secret-is-valid? gtfs_archive_secret); (if gtfs_archive_secret
+          (json-ring-response (cache-manager-as-json))
+          "Permission denied.")))
+  (GET "/test-authentication" []
+       "Please use POST")
+  (POST "/test-authentication" [gtfs_archive_secret]
+        (if (gtfs-archive-secret-is-valid? gtfs_archive_secret)
+          "hello, admin!"
+          "hello, world!"))
   (POST "/archive-target" [submit which-feeds year month day force-rebuild]
     (archive-target-page submit which-feeds year month day force-rebuild))
   (POST "/archive-creator" [submit which-feeds year month day]
