@@ -148,7 +148,12 @@
   (-> (ring-response/response string-containing-json)
       (ring-response/header "Content-type" "application/json; charset=utf-8")))
 
+
 (defn gtfs-archive-secret-is-valid?
+  ;; TODO: create an (only-if-secret-is-valid [secret &body ...]) macro.
+  ;; Or, is an if statement expressive enough? I think we'll always want to
+  ;; return the same error message if they're not authorized, to avoid leaking
+  ;; information. So creating this as a macro does make sense.
   " Look at number-of-secrets-to-look-for environent variables, and see if
   ``secret'' is one of them. Secrets are given in the environment as
   GTFS_ARCHIVE_SECRET_0, GTFS_ARCHIVE_SECRET_1, etc.   "
@@ -180,7 +185,8 @@
     (ANY "/cache-manager" []
         (if (gtfs-archive-secret-is-valid? gtfs_archive_secret); (if gtfs_archive_secret
           (json-ring-response (cache-manager-as-json))
-          "Permission denied.")))
+          ;; TODO: we should return HTTP status for permission denied.
+          (json-ring-response "{ \"error\": \"Permission denied.\"}"))))
   (GET "/test-authentication" []
        "Please use POST")
   (POST "/test-authentication" [gtfs_archive_secret]
