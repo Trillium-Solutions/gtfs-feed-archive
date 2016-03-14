@@ -105,10 +105,16 @@
         fresh-enough? (fn [date]
                         ;;(println "date:" date "modified-date" modified-date)
                         (.after date cutoff))]
-    (first (filter (every-pred download-agent/success?
-                               (comp fresh-enough? :last-modified)
-                               (partial download-agent/has-feed-name? feed-name))
-                   (map deref download-agents)))))
+    (let [candidates 
+          (sort-by 
+            ;; :completion-date
+            :last-modified
+            (filter (every-pred download-agent/success?
+                                (comp fresh-enough? :last-modified)
+                                (partial download-agent/has-feed-name? feed-name))
+                    (map deref download-agents)))]
+      (info "Candidates for freshest agents:" candidates)
+      (last candidates))))
 
 (defn feed-already-has-running-download-agent? [feed-name manager]
   (some (every-pred download-agent/still-running?
@@ -156,7 +162,7 @@
 (defn newest-agent-for-each-feed [agents]
   (let [names (into #{} (map (comp :feed-name deref) agents))
         newest-agents (for [n names]
-                        (first (sort-by (comp :last-modified deref)
+                        (last (sort-by (comp :last-modified deref)
                                         (filter #(= n (:feed-name @%)) agents))))]
     ;;(debug "names" names)
     ;;(debug "newest-agents" newest-agents)
