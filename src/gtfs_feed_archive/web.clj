@@ -187,9 +187,9 @@
           (json-ring-response (cache-manager-as-json))
           ;; TODO: we should return HTTP status for permission denied.
           (json-ring-response "{ \"error\": \"Permission denied.\"}"))))
-  (GET "/test-authentication" []
-       "Please use POST")
-  (POST "/test-authentication" [gtfs_archive_secret]
+  ;(GET "/test-authentication" []
+  ;     "Please use POST")
+  (ANY "/test-authentication" [gtfs_archive_secret]
         (if (gtfs-archive-secret-is-valid? gtfs_archive_secret)
           "hello, admin!"
           "hello, world!"))
