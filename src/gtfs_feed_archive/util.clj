@@ -271,6 +271,11 @@
     [(str "feeds/" (:feed-name a) "/" (:feed-name a) ".zip")
      (clojure.java.io/input-stream (:file-name a))]))
 
+(defn download-agents->concated-csv
+  [download-agents]
+  (concat (for [a (map deref download-agents) ]
+            (clojure.java.io/input-stream (:file-name a))))
+
 (defn prepend-path-to-file-list [path zip-file-list]
   (for [[name data] zip-file-list] 
     [(str path "/" name) data]))
