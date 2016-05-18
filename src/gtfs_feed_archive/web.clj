@@ -16,6 +16,7 @@
             [gtfs-feed-archive.download-agent :as download-agent]
             [gtfs-feed-archive.config :as config]
             [gtfs-feed-archive.archive-creator :as archive-creator]
+            [gtfs-feed-archive.access-individual-feed :as access-individual-feed]
             [gtfs-feed-archive.command-line :as command-line])
   (:use compojure.core
         [hiccup.core :only [h html]]
@@ -178,6 +179,11 @@
   (GET "/update-feeds" [] ;; update feeds
     (update-feeds))
 
+  (context "/gtfs-archive-api" []
+    (GET "/" [] (str "Hello, World"))
+    (GET "/feed/:feed-name" [feed-name]
+         (str (access-individual-feed/get-chosen-feeds-csv! feed-name))))
+
   (context "/admin-api" [gtfs_archive_secret]
     ;; These API endpoints are for the GTFS-API Admin Console, or other monitoring systems.
     ;(GET "/cache-manager" []
@@ -203,6 +209,7 @@
   (GET "/v" []
     (variables-demo))
   (route/not-found (html [:h1 "Page not found"])))
+  
 
 (def app-site (handler/site app))
 
