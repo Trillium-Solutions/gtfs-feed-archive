@@ -248,7 +248,6 @@
       (.putNextEntry z (java.util.zip.ZipEntry. name))
       (copy-data-to-stream content z))))
 
-
 (defn download-agents->last-updates-csv [download-agents]
   ;; TODO: use the CSV file writer to ensure proper quoting so strange
   ;; names and URLs don't have a chance to break the CSV file.
@@ -271,10 +270,11 @@
     [(str "feeds/" (:feed-name a) "/" (:feed-name a) ".zip")
      (clojure.java.io/input-stream (:file-name a))]))
 
-(defn download-agents->concated-csv
-  [download-agents]
-  (concat (for [a (map deref download-agents) ]
-            (clojure.java.io/input-stream (:file-name a)))))
+(defn download-agent->zip-file
+  [download-agent output-file-name]
+  (clojure.java.io/copy (clojure.java.io/input-stream 
+                          (:file-name (apply deref download-agent))) 
+                        (clojure.java.io/output-stream output-file-name))) 
 
 (defn prepend-path-to-file-list [path zip-file-list]
   (for [[name data] zip-file-list] 
