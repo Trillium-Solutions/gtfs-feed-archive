@@ -183,8 +183,13 @@
     (GET "/" [] (str "Hello, World"))
     (GET "/feed/:feed-name" [feed-name]
          (do (access-individual-feed/get-chosen-feeds-zip! (list feed-name))
-             (link-to 
-               (access-individual-feed/feed-name->individual-download-link feed-name)))))
+             (print (str "Link: " (link-to (archive-filename->download-link
+                               (access-individual-feed/individual-feed-file-name
+                                                    feed-name)))))
+             (html [:p (link-to 
+               (archive-filename->download-link
+                 (access-individual-feed/individual-feed-file-name 
+                   feed-name)) "download-link")]))))
 
   (context "/admin-api" [gtfs_archive_secret]
     ;; These API endpoints are for the GTFS-API Admin Console, or other monitoring systems.

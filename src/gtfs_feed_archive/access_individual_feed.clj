@@ -17,8 +17,8 @@
                                               (int (* 1000 60 60
                                                       @config/*freshness-hours*))))))
 
-(defn feed-name->individual-download-link [feed-name]
-  (str @config/*archive-output-url* "/" feed-name "-" (inst->rfc3339-day (now))
+(defn individual-feed-file-name [feed-name]
+  (str feed-name "-" (inst->rfc3339-day (now))
        ".zip"))
 
 (defn get-chosen-feeds-zip! [feed-names]
@@ -28,8 +28,9 @@
             "Feed found? " (pr-str (chosen-feeds feed-names))
             "More testing: " (pr-str (first (mapcat read-csv-file @config/*input-csv-files*))))
       (download-agent->zip-file (verify-freshness-of-chosen-feeds! feed-names)
-                                (apply feed-name->individual-download-link 
-                                  feed-names))
+                                (str @config/*archive-output-directory* "/"
+                                     (apply individual-feed-file-name 
+                                            feed-names)))
   #_(catch Exception e
     (error "The cache does not contain new enough copies of the GTFS feeds requested.")
     (error "This is usually due to a download problem or a typo in the download URL."))))
