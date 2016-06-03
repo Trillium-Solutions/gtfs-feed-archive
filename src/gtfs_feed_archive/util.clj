@@ -272,7 +272,7 @@
 
 (defn download-agent->zip-file
   [download-agent output-file-name]
-  (clojure.java.io/copy (clojure.java.io/input-stream 
+  (copy-binary-file (clojure.java.io/input-stream 
                           (:file-name (apply deref download-agent))) 
                         (clojure.java.io/output-stream output-file-name))) 
 
