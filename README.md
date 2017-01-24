@@ -2,6 +2,10 @@
 
 A Clojure library to create an archive of GTFS (general transit feed) data.
 
+## Building
+
+lein uberjar
+
 ## Usage
 
 Command line operation & web interface.
