@@ -117,9 +117,14 @@
     ;; TODO is this await needed?
     (await config/*archive-list*)))
 
-(defn all-feeds-filename []
+(defn all-feeds-filename 
+  ([]
+   (all-feeds-filename false)) ;; default autodelete == false. Ed 2017-01-24
+  ([autodelete]
   (str @config/*archive-filename-prefix* "-feeds-"
-       (inst->rfc3339-day (now)) ".zip" ))
+       (inst->rfc3339-day (now)) 
+       (if autodelete ".autodelete" "") 
+       ".zip")))
 
 (defn build-archive-of-all-feeds-worker!
   [filename]
@@ -146,9 +151,18 @@
                              (build-archive-of-all-feeds-worker! filename)))))
 
 
-(defn modified-since-filename [since-date]
-  (str @config/*archive-filename-prefix* "-updated-from-" (inst->rfc3339-day since-date)
-            "-to-" (inst->rfc3339-day (now)) ".zip"))
+(defn modified-since-filename 
+  ([since-date]
+   ;; default autodelete = false. Ed 2017-01-24
+   ;; autodelete allows api to request an archive every day, without filling up
+   ;; the server filesystem.
+   (modified-since-filename since-date false))
+  ([since-date autodelete]
+   (str @config/*archive-filename-prefix* 
+        "-updated-from-" (inst->rfc3339-day since-date)
+        "-to-" (inst->rfc3339-day (now)) 
+        (if autodelete ".autodelete" "") 
+        ".zip")))
 
 (defn build-archive-of-feeds-modified-since-worker!
   [since-date filename]

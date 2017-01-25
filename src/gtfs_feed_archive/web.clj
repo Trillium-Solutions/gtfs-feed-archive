@@ -57,12 +57,12 @@
 (defn archive-filename->download-link [filename]
   (str @config/*archive-output-url* "/" filename))
 
-(defhtml archive-target-page [submit which-feeds year month day force-rebuild]
+(defhtml archive-target-page [submit which-feeds year month day force-rebuild autodelete]
   (binding [archive-creator/*force-rebuild?* (boolean force-rebuild)]
     [:head [:title "GTFS Feed Archive"]]
     [:body
      (when (= which-feeds "all")
-       (let [filename (archive-creator/all-feeds-filename)
+       (let [filename (archive-creator/all-feeds-filename autodelete)
              url  (archive-filename->download-link filename) ]
          (archive-creator/build-archive-of-all-feeds! filename)
          (await config/*archive-list*) ;; wait until archive is available.
@@ -70,7 +70,7 @@
           [:p "Download is available at " (link-to url filename)] ] ))
      (when (= which-feeds "since-date")
        (try (let [date (parse-date (str year "-" month "-" day))
-                  filename (archive-creator/modified-since-filename date)
+                  filename (archive-creator/modified-since-filename date autodelete)
                   url (archive-filename->download-link filename) ]
               (info "I was asked to build an archive of feeds modified since" date)
               (archive-creator/build-archive-of-feeds-modified-since! date filename)
@@ -93,14 +93,19 @@
    "-->"
    (let [all-feeds? (or (= which-feeds nil)
                         (= which-feeds "all"))
-         year (or year "2013")
+         year (or year "2017")
          month (or month "01")
-         day (or day "15")]
+         day (or day "01")
+         ;; Mark for autodeletion, so API can request a new archive every day
+         ;; without filling up server filesystem. Ed 2017-01-24
+         autodelete false 
+         ]
      (form-to [:post "archive-target"] 
               [:p [:label "All Feeds"            (radio-button "which-feeds" all-feeds? "all")]]
               [:p [:label "Feeds Modified Since" (radio-button "which-feeds" (not all-feeds?) "since-date")]
                "Date: " (date-selector year month day)]
               [:p [:label "Force archive rebuild" (check-box "force-rebuild" false)]]
+              [:p [:label "Auto-delete archive after download" (check-box "autodelete" autodelete "autodelete")]]
               (submit-button {:name "submit"} "Create Archive")))
    [:p "All previously generated archives may be found on the "
              (link-to @config/*archive-output-url* "download page") "."]])
@@ -179,6 +184,9 @@
   (GET "/update-feeds" [] ;; update feeds
     (update-feeds))
 
+  ;; Example:
+  ;; http://archive.oregon-gtfs.com/gtfs-api-feeds/gtfs-archive-api/feed/tillamook-or-us
+  ;; Ed 2017-01-24
   (context "/gtfs-archive-api" []
     (GET "/" [] (str "Hello, World"))
     (GET "/feed/:feed-name" [feed-name]
@@ -206,8 +214,8 @@
         (if (gtfs-archive-secret-is-valid? gtfs_archive_secret)
           "hello, admin!"
           "hello, world!"))
-  (POST "/archive-target" [submit which-feeds year month day force-rebuild]
-    (archive-target-page submit which-feeds year month day force-rebuild))
+  (POST "/archive-target" [submit which-feeds year month day force-rebuild autodelete]
+    (archive-target-page submit which-feeds year month day force-rebuild autodelete))
   (POST "/archive-creator" [submit which-feeds year month day]
     (archive-generator-page submit which-feeds year month day))
   (GET "/archive-creator" [submit which-feeds year month day]

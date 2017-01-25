@@ -218,7 +218,8 @@
               :else (do (Thread/sleep (* 1000 10)) ; 10 seconds
                         (debug "all feeds OK?" all-feeds-ok)
                         (debug "any agents still running?" any-agents-still-running)
-                        (debug "running agents:" running-agents)
+                        ; (debug "running agents:" running-agents)
+                        (debug "running agents:" (seq running-agents))
                         (debug "successful agents:" successful-feed-names)
                         (debug "waiting for these agents:" unsuccessful-feed-names)
                         (recur)))))))

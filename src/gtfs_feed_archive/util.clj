@@ -7,6 +7,9 @@
             clj-time.coerce
             clj-time.format
             clj-time.core)
+  ;; It seems miner.ftp refers to java.net.URI as URI, but doesn't import it.
+  ;; So we import it ourselves. Ed 2017-01-24
+  (:import [java.net URI]) 
   (:use clojure.test
         clojure-csv.core
         [clojure.pprint :only [pprint]] 
@@ -157,25 +160,29 @@
   [url] 
   (let [url-parts (try-catch-nil (http/parse-url url))
         scheme (:scheme url-parts)]
-    (condp = scheme
-     :ftp (try
-            ;; grab via FTP, and return a similar hash-map to http/get.
-            (let [last-modified (ftp-url-last-modifed url)
-                  data (clj-ftp-file-data url)]
-              (if (and last-modified data)
-                {:body data
-                 :last-modified last-modified}
-                nil))
-            (catch Exception _ nil))
-     :http (try
-             ;; http/get with the { :as :byte-array } option avoids text
-             ;; conversion, which would corrupt our zip file.
-             (let [response (http/get url
-                                      {:as :byte-array
-                                       :force-redirects true})]
-               {:body (:body response)
-                :last-modified (try-catch-nil (http-last-modified-header response))})
-             (catch Exception _ nil)))))
+    (debug "scheme" scheme)
+    (cond
+      (= scheme :ftp)  ;;; FTP URL.
+      (try
+        ;; grab via FTP, and return a similar hash-map to http/get.
+        (let [last-modified (ftp-url-last-modifed url)
+              data (clj-ftp-file-data url)]
+          (if (and last-modified data)
+            {:body data
+             :last-modified last-modified}
+            nil))
+        (catch Exception _ nil))
+      (or (= scheme :http)   ;;; HTTP or HTTPS URL.
+          (= scheme :https))
+      (try
+        ;; http/get with the { :as :byte-array } option avoids text
+        ;; conversion, which would corrupt our zip file.
+        (let [response (http/get url
+                                 {:as :byte-array
+                                  :force-redirects true})]
+          {:body (:body response)
+           :last-modified (try-catch-nil (http-last-modified-header response))})
+        (catch Exception _ nil)))))
 
 (defn http-page-last-modified [url]
   (or (try-catch-nil 
@@ -197,7 +204,8 @@
   (let [scheme (:scheme (http/parse-url url))]
     (condp = scheme
       :ftp (ftp-url-last-modifed url)
-      :http (http-page-last-modified url))))
+      :http (http-page-last-modified url)
+      :https (http-page-last-modified url))))
 
 (defn page-data "http/get example"
   [url]
