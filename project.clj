@@ -1,4 +1,4 @@
-(defproject gtfs-feed-archive "0.2.1.0"
+(defproject gtfs-feed-archive "0.2.1.1"
   :description "GTFS Feed Archive Tool"
   :url "http://github.com/ed-g/gtfs-feed-archive"
   :jvm-opts ["-Djsse.enableSNIExtension=false"] ;; fix ssl handshake alert

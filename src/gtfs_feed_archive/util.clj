@@ -177,9 +177,11 @@
       (try
         ;; http/get with the { :as :byte-array } option avoids text
         ;; conversion, which would corrupt our zip file.
-        (let [response (http/get url
+        (let [useragent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36"
+              response (http/get url
                                  {:as :byte-array
-                                  :force-redirects true})]
+                                  :force-redirects true
+                                  :client-params { "http.useragent" useragent}})]
           {:body (:body response)
            :last-modified (try-catch-nil (http-last-modified-header response))})
         (catch Exception _ nil)))))
