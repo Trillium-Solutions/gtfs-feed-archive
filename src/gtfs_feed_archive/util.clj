@@ -19,7 +19,7 @@
 
 (def t true);; for cl-format.
 
-(def HTTP_USER_AGENT  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36"
+(def HTTP_USER_AGENT  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36")
 
 (defmacro try-catch-nil
   "Evaluate form, or return nil if there was an exception."
