@@ -111,6 +111,7 @@
              (filter #(.endsWith (.toLowerCase %) ".zip"))
              (map (fn [name] [name :complete]))
              (into {}))]
+    (info "archive-list-from-disk" archive-list-from-disk)
     (send config/*archive-list*
           (fn [existing-archive-list]
             (merge existing-archive-list archive-list-from-disk)))
