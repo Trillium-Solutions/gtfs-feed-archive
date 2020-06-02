@@ -253,7 +253,7 @@
 
 (defn fetch-feeds-slow! [feeds]
   (let [start-time (now)
-        delay-ms 500]
+        delay-ms 100]
     (do 
       (doseq [f feeds]
         (Thread/sleep delay-ms ) ; wait between fetching feeds to avoid hammering a server.
