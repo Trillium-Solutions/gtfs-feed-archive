@@ -1,3 +1,5 @@
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+
 # gtfs-feed-archive
 
 A Clojure library to create an archive of GTFS (general transit feed) data.
